@@ -46,10 +46,14 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
         # Controller state
         self.controller_enabled = True
         self.manual_mode_override = None  # None = AUTO, or "heat"/"cool" for manual mode
+        self._last_known_device_mode = None  # Track last known device mode
 
         # Multi-split support
         self.multi_split_coordinator = get_multi_split_coordinator(hass)
         self.multi_split_group_id = config.get("multi_split_group")
+
+        # Setup state listener for climate entity
+        self._setup_state_listener()
 
     async def _async_update_data(self):
         """Execute control cycle and return diagnostic data."""
@@ -72,6 +76,10 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
             if climate_state is None:
                 _LOGGER.warning("Climate entity unavailable")
                 return self._get_safe_data()
+
+            # Update last known device mode
+            device_mode = climate_state["hvac_mode"]
+            self._last_known_device_mode = device_mode
 
             # Get multi-split shared mode if applicable
             multi_split_shared_mode = None
@@ -226,6 +234,94 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
                 other_coordinator.manual_mode_override = mode
                 _LOGGER.debug("Set manual mode %s for zone %s", mode, zone_id)
 
+                # Force immediate update for other zone to apply mode change
+                self.hass.async_create_task(other_coordinator.async_request_refresh())
+
     async def async_force_update(self) -> None:
         """Force immediate control cycle."""
         await self.async_request_refresh()
+
+    def _setup_state_listener(self) -> None:
+        """Setup listener for climate entity state changes."""
+        climate_entity = self.config.get("climate_entity")
+        if not climate_entity:
+            return
+
+        async def state_change_listener(event):
+            """Handle state changes of the climate entity."""
+            new_state = event.data.get("new_state")
+            old_state = event.data.get("old_state")
+
+            if new_state is None or old_state is None:
+                return
+
+            new_mode = new_state.state
+            old_mode = old_state.state
+
+            # Ignore if mode didn't change
+            if new_mode == old_mode:
+                return
+
+            _LOGGER.info(
+                "Climate entity mode changed: %s -> %s (manual_mode_override=%s, controller_enabled=%s)",
+                old_mode,
+                new_mode,
+                self.manual_mode_override,
+                self.controller_enabled,
+            )
+
+            # Determine what mode the integration expects
+            expected_mode = None
+            if not self.controller_enabled:
+                expected_mode = "off"
+            elif self.manual_mode_override:
+                expected_mode = self.manual_mode_override
+            # For AUTO mode (no manual override), we don't have a fixed expected_mode
+
+            # If user changed mode on AC (not through integration), restore expected mode
+            if expected_mode and new_mode != expected_mode:
+                _LOGGER.warning(
+                    "User manually changed AC mode to %s, but integration expects %s. Restoring integration mode.",
+                    new_mode,
+                    expected_mode,
+                )
+
+                # Wait a bit to avoid race conditions
+                await asyncio.sleep(0.5)
+
+                # Restore the expected mode
+                from .application.commands import SetClimateCommand
+                from .domain.value_objects import HVACMode, Temperature
+
+                if expected_mode in ("heat", "cool"):
+                    # Get current target temperature from config
+                    target_temp = self.config.get("target_temp", 24.0)
+                    command = SetClimateCommand(
+                        device_id=climate_entity,
+                        hvac_mode=HVACMode(expected_mode),
+                        target_temperature=Temperature(target_temp),
+                    )
+                    _LOGGER.info("Restoring mode to: %s with temp: %.1f", expected_mode, target_temp)
+                    await self.command_sender.send_climate_command(command, climate_entity)
+                elif expected_mode == "off":
+                    command = SetClimateCommand(
+                        device_id=climate_entity,
+                        hvac_mode=HVACMode.OFF,
+                        target_temperature=None,
+                    )
+                    _LOGGER.info("Restoring mode to: OFF")
+                    await self.command_sender.send_climate_command(command, climate_entity)
+
+            # Update last known device mode
+            self._last_known_device_mode = new_mode
+
+            # Trigger immediate update to refresh sensors
+            self.hass.async_create_task(self.async_request_refresh())
+
+        # Register listener
+        self.hass.bus.async_listen(
+            "state_changed",
+            state_change_listener,
+            lambda event: event.data.get("entity_id") == climate_entity,
+        )
+        _LOGGER.info("State listener registered for %s", climate_entity)
