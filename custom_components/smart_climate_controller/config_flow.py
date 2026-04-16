@@ -231,24 +231,15 @@ class SmartClimateControllerOptionsFlow(config_entries.OptionsFlow):
     async def async_step_global_settings(self, user_input=None):
         """Handle global settings."""
         if user_input is not None:
-            # Also update outdoor sensor in config data
-            outdoor_sensor = user_input.get(CONF_OUTDOOR_TEMP_SENSOR)
-            if outdoor_sensor:
-                # Update config entry data with new outdoor sensor
-                new_data = dict(self.config_entry.data)
-                new_data[CONF_OUTDOOR_TEMP_SENSOR] = outdoor_sensor
-                # Update each AC unit with new outdoor sensor
-                if CONF_AC_UNITS in new_data:
-                    for ac_unit in new_data[CONF_AC_UNITS]:
-                        ac_unit[CONF_OUTDOOR_TEMP_SENSOR] = outdoor_sensor
-                self.hass.config_entries.async_update_entry(
-                    self.config_entry, data=new_data
-                )
+            # Save outdoor sensor in options (will be read by coordinator)
             return self.async_create_entry(title="", data=user_input)
 
         options = self.config_entry.options
-        # Get current outdoor sensor from config data
-        current_outdoor_sensor = self.config_entry.data.get(CONF_OUTDOOR_TEMP_SENSOR)
+        # Get current outdoor sensor from options first, then fallback to config data
+        current_outdoor_sensor = options.get(
+            CONF_OUTDOOR_TEMP_SENSOR,
+            self.config_entry.data.get(CONF_OUTDOOR_TEMP_SENSOR)
+        )
 
         schema = vol.Schema(
             {

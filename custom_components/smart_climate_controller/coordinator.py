@@ -115,17 +115,25 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
 
     def _get_room_config(self, room_name: str) -> dict[str, Any] | None:
         """Get room/AC configuration - supports both old and new formats."""
+        config = None
         # New format: CONF_AC_UNITS
         if CONF_AC_UNITS in self.entry.data:
             for ac_config in self.entry.data.get(CONF_AC_UNITS, []):
                 if ac_config[CONF_AC_NAME] == room_name:
-                    return ac_config
+                    config = ac_config.copy()
+                    break
         # Legacy format: CONF_ROOMS
         else:
             for room_config in self.entry.data.get(CONF_ROOMS, []):
                 if room_config[CONF_ROOM_NAME] == room_name:
-                    return room_config
-        return None
+                    config = room_config.copy()
+                    break
+
+        # Override outdoor sensor from options if available
+        if config and CONF_OUTDOOR_TEMP_SENSOR in self.entry.options:
+            config[CONF_OUTDOOR_TEMP_SENSOR] = self.entry.options[CONF_OUTDOOR_TEMP_SENSOR]
+
+        return config
 
     def _get_global_option(self, key: str, default: Any) -> Any:
         """Get global option value."""
