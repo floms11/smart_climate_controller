@@ -60,6 +60,7 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
         self.last_run_start: Optional[datetime] = None  # When AC turned on (OFF -> HEAT/COOL)
         self.last_idle_start: Optional[datetime] = None  # When AC turned off (HEAT/COOL -> OFF)
         self.last_setpoint_adjustment: Optional[datetime] = None  # Last time setpoint was adjusted
+        self.last_command_sent: Optional[datetime] = None  # When integration sent last command
 
         # Multi-split support
         self.multi_split_coordinator = get_multi_split_coordinator(hass)
@@ -198,6 +199,8 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
                     command.target_temperature.value if command.target_temperature else "None",
                     decision.should_send_command,
                 )
+                # Record when we sent the command
+                self.last_command_sent = now
                 await self.command_sender.send_climate_command(
                     command,
                     climate_entity,
@@ -356,6 +359,22 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
                 self.controller_enabled,
             )
 
+            # Check if this change was caused by our own command
+            # If we sent a command in the last 3 seconds, this is probably our change
+            now = dt_util.utcnow()
+            if self.last_command_sent:
+                seconds_since_command = (now - self.last_command_sent).total_seconds()
+                if seconds_since_command < 3:
+                    _LOGGER.debug(
+                        "Mode change happened %.1fs after our command - this is our change, not user's. Ignoring.",
+                        seconds_since_command
+                    )
+                    # Update last known device mode
+                    self._last_known_device_mode = new_mode
+                    # Trigger immediate update to refresh sensors
+                    self.hass.async_create_task(self.async_request_refresh())
+                    return
+
             # Get the desired mode from last decision (what integration wants)
             desired_mode = None
             if self.data and self.data.get("decision"):
@@ -363,8 +382,9 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
                 if decision.desired_mode:
                     desired_mode = decision.desired_mode.value
 
-            # If user changed mode on AC and it doesn't match desired mode, restore it
-            if desired_mode and new_mode != desired_mode and new_mode in ("heat", "cool", "off"):
+            # If user manually changed mode on physical AC device and it doesn't match desired mode, restore it
+            # BUT: Only restore if controller is enabled - don't fight with user when controller is off
+            if desired_mode and new_mode != desired_mode and new_mode in ("heat", "cool", "off") and self.controller_enabled:
                 _LOGGER.warning(
                     "User manually changed AC mode to %s, but Desired HVAC Mode is %s. Restoring to %s.",
                     new_mode,
@@ -438,6 +458,10 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
                 self.last_setpoint_adjustment = dt_util.parse_datetime(data["last_setpoint_adjustment"])
                 _LOGGER.debug("Restored last_setpoint_adjustment: %s", self.last_setpoint_adjustment)
 
+            if "last_command_sent" in data and data["last_command_sent"]:
+                self.last_command_sent = dt_util.parse_datetime(data["last_command_sent"])
+                _LOGGER.debug("Restored last_command_sent: %s", self.last_command_sent)
+
             # Restore last known device mode
             if "last_known_device_mode" in data:
                 self._last_known_device_mode = data["last_known_device_mode"]
@@ -456,6 +480,7 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
                 "last_run_start": self.last_run_start.isoformat() if self.last_run_start else None,
                 "last_idle_start": self.last_idle_start.isoformat() if self.last_idle_start else None,
                 "last_setpoint_adjustment": self.last_setpoint_adjustment.isoformat() if self.last_setpoint_adjustment else None,
+                "last_command_sent": self.last_command_sent.isoformat() if self.last_command_sent else None,
                 "last_known_device_mode": self._last_known_device_mode,
             }
 
