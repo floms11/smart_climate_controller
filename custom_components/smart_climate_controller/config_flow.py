@@ -50,26 +50,9 @@ class SmartClimateControllerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN)
         self._outdoor_temp_sensor = None
 
     async def async_step_user(self, user_input=None):
-        """Handle the initial step - outdoor sensor."""
-        errors = {}
-
-        if user_input is not None:
-            self._outdoor_temp_sensor = user_input[CONF_OUTDOOR_TEMP_SENSOR]
-            return await self.async_step_add_ac()
-
-        schema = vol.Schema(
-            {
-                vol.Required(CONF_OUTDOOR_TEMP_SENSOR): selector.EntitySelector(
-                    selector.EntitySelectorConfig(domain="sensor", device_class="temperature")
-                ),
-            }
-        )
-
-        return self.async_show_form(
-            step_id="user",
-            data_schema=schema,
-            errors=errors,
-        )
+        """Handle the initial step - add AC units."""
+        # Skip directly to adding AC units
+        return await self.async_step_add_ac(user_input)
 
     async def async_step_add_ac(self, user_input=None):
         """Handle adding an AC unit."""
@@ -81,10 +64,8 @@ class SmartClimateControllerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN)
             if any(ac[CONF_AC_NAME] == ac_name for ac in self._ac_units):
                 errors[CONF_AC_NAME] = "duplicate_ac_name"
             else:
-                # Add outdoor sensor to each AC unit
-                ac_unit = user_input.copy()
-                ac_unit[CONF_OUTDOOR_TEMP_SENSOR] = self._outdoor_temp_sensor
-                self._ac_units.append(ac_unit)
+                # Add AC unit without outdoor sensor (will be added in global settings)
+                self._ac_units.append(user_input.copy())
                 return await self.async_step_add_another()
 
         schema = vol.Schema(
@@ -129,17 +110,25 @@ class SmartClimateControllerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN)
     async def async_step_global_settings(self, user_input=None):
         """Handle global settings."""
         if user_input is not None:
+            # Extract outdoor sensor and add it to each AC unit
+            outdoor_sensor = user_input.pop(CONF_OUTDOOR_TEMP_SENSOR)
+            for ac_unit in self._ac_units:
+                ac_unit[CONF_OUTDOOR_TEMP_SENSOR] = outdoor_sensor
+
             return self.async_create_entry(
                 title="Smart Climate Controller",
                 data={
                     CONF_AC_UNITS: self._ac_units,
-                    CONF_OUTDOOR_TEMP_SENSOR: self._outdoor_temp_sensor,
+                    CONF_OUTDOOR_TEMP_SENSOR: outdoor_sensor,
                 },
                 options=user_input,
             )
 
         schema = vol.Schema(
             {
+                vol.Required(CONF_OUTDOOR_TEMP_SENSOR): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain="sensor", device_class="temperature")
+                ),
                 vol.Required(
                     CONF_OUTDOOR_TEMP_HEAT_ONLY,
                     default=DEFAULT_OUTDOOR_TEMP_HEAT_ONLY,
