@@ -81,7 +81,36 @@ class SmartClimateEntity(CoordinatorEntity, ClimateEntity):
         if not self.coordinator.controller_enabled:
             return HVACMode.OFF
 
-        # Return AUTO as this is a smart controller
+        # Show the actual device mode when controller is active
+        if self.coordinator.data is None:
+            return HVACMode.AUTO
+
+        device_mode = self.coordinator.data.get("device_mode")
+        decision = self.coordinator.data.get("decision")
+
+        # If we have a decision, show desired mode (what we want to achieve)
+        if decision and decision.desired_mode:
+            desired_mode_str = decision.desired_mode.value
+            mode_map = {
+                "off": HVACMode.OFF,
+                "heat": HVACMode.HEAT,
+                "cool": HVACMode.COOL,
+                "auto": HVACMode.AUTO,
+            }
+            return mode_map.get(desired_mode_str, HVACMode.AUTO)
+
+        # Fallback to actual device mode
+        if device_mode:
+            mode_map = {
+                "off": HVACMode.AUTO,  # Show AUTO even if device is off (controller is active)
+                "heat": HVACMode.HEAT,
+                "cool": HVACMode.COOL,
+                "auto": HVACMode.AUTO,
+                "dry": HVACMode.AUTO,
+                "fan_only": HVACMode.AUTO,
+            }
+            return mode_map.get(device_mode, HVACMode.AUTO)
+
         return HVACMode.AUTO
 
     @property
@@ -128,6 +157,11 @@ class SmartClimateEntity(CoordinatorEntity, ClimateEntity):
         """Set new target temperature."""
         if (temperature := kwargs.get(ATTR_TEMPERATURE)) is None:
             return
+
+        # Auto-enable controller when user sets temperature
+        if not self.coordinator.controller_enabled:
+            _LOGGER.info("Auto-enabling controller on temperature change")
+            self.coordinator.set_controller_enabled(True)
 
         self.coordinator.set_target_temperature(temperature)
         await self.coordinator.async_request_refresh()

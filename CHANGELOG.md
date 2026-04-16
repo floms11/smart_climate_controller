@@ -79,6 +79,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Added translations in `en.json` and new `uk.json` (Ukrainian)
 - Fixed empty string handling for `multi_split_group` configuration parameter
 - Config flow now properly displays and saves `multi_split_group` field
+- **UX**: Improved climate entity behavior
+  - Now shows actual HVAC mode (HEAT/COOL) instead of always showing AUTO
+  - Auto-enables controller when user changes target temperature
+  - Entity state now reflects controller's desired mode for better visibility
 
 ### Technical Details
 - Backward compatible with 0.1.x single-zone configurations
