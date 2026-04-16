@@ -367,6 +367,12 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
         target_temp = room_state.target_temperature
         temp_diff = indoor_temp - target_temp
 
+        # Get current AC state
+        climate_entity_id = room_config[CONF_CLIMATE_ENTITY]
+        climate_state = self.hass.states.get(climate_entity_id)
+        current_mode = HVACMode(climate_state.state) if climate_state and climate_state.state in HVACMode else None
+        is_currently_off = current_mode == HVACMode.OFF
+
         # Get configuration parameters
         minor_hysteresis = self._get_global_option(
             CONF_MINOR_CORRECTION_HYSTERESIS, DEFAULT_MINOR_CORRECTION_HYSTERESIS
@@ -425,11 +431,18 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
                         "Room %s: HEAT mode - within acceptable range (diff %.1f), mode changed - turning off",
                         room_name, temp_diff
                     )
+                elif is_currently_off:
+                    # AC is already OFF and temp in range - keep it off
+                    _LOGGER.info(
+                        "Room %s: HEAT mode - within acceptable range (diff %.1f), AC already OFF - keeping OFF",
+                        room_name, temp_diff
+                    )
+                    return  # Don't send any commands
                 else:
-                    # Normal operation - set target temperature
+                    # AC is ON - maintain target temperature
                     ac_target_temp = target_temp
                     _LOGGER.info(
-                        "Room %s: HEAT mode - within acceptable range (diff %.1f) - set target %.1f",
+                        "Room %s: HEAT mode - within acceptable range (diff %.1f) - maintaining target %.1f",
                         room_name, temp_diff, ac_target_temp
                     )
 
@@ -465,11 +478,18 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
                         "Room %s: COOL mode - within acceptable range (diff %.1f), mode changed - turning off",
                         room_name, temp_diff
                     )
+                elif is_currently_off:
+                    # AC is already OFF and temp in range - keep it off
+                    _LOGGER.info(
+                        "Room %s: COOL mode - within acceptable range (diff %.1f), AC already OFF - keeping OFF",
+                        room_name, temp_diff
+                    )
+                    return  # Don't send any commands
                 else:
-                    # Normal operation - set target temperature
+                    # AC is ON - maintain target temperature
                     ac_target_temp = target_temp
                     _LOGGER.info(
-                        "Room %s: COOL mode - within acceptable range (diff %.1f) - set target %.1f",
+                        "Room %s: COOL mode - within acceptable range (diff %.1f) - maintaining target %.1f",
                         room_name, temp_diff, ac_target_temp
                     )
 
