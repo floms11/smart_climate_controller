@@ -2,6 +2,8 @@
 from typing import Optional
 from datetime import datetime
 
+from homeassistant.util import dt as dt_util
+
 from ..domain.value_objects import (
     Temperature,
     TemperatureRate,
@@ -140,5 +142,5 @@ class DomainMapper:
             last_setpoint_adjustment=last_setpoint_adjustment,
             setpoint_adjustment_interval=setpoint_adjustment_interval,
             setpoint_step=setpoint_step,
-            now=now or datetime.now(),
+            now=now or dt_util.utcnow(),
         )

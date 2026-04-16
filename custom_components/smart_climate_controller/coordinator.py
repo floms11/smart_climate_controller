@@ -473,6 +473,19 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
                 self._last_known_device_mode = data["last_known_device_mode"]
                 _LOGGER.debug("Restored last_known_device_mode: %s", self._last_known_device_mode)
 
+            # Restore thermostat state
+            if "controller_enabled" in data:
+                self.controller_enabled = data["controller_enabled"]
+                _LOGGER.info("Restored controller_enabled: %s", self.controller_enabled)
+
+            if "manual_mode_override" in data:
+                self.manual_mode_override = data["manual_mode_override"]
+                _LOGGER.info("Restored manual_mode_override: %s", self.manual_mode_override)
+
+            if "target_temp" in data and data["target_temp"] is not None:
+                self.config["target_temp"] = data["target_temp"]
+                _LOGGER.info("Restored target_temp: %.1f", data["target_temp"])
+
             _LOGGER.info("State restoration completed for %s", self.entry_id)
 
         except Exception as err:
@@ -488,6 +501,10 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
                 "last_setpoint_adjustment": self.last_setpoint_adjustment.isoformat() if self.last_setpoint_adjustment else None,
                 "last_command_sent": self.last_command_sent.isoformat() if self.last_command_sent else None,
                 "last_known_device_mode": self._last_known_device_mode,
+                # Thermostat state
+                "controller_enabled": self.controller_enabled,
+                "manual_mode_override": self.manual_mode_override,
+                "target_temp": self.config.get("target_temp"),
             }
 
             await self._store.async_save(data)
