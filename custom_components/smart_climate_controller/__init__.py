@@ -40,7 +40,11 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 async def async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Reload config entry when options change."""
+    _LOGGER.info("Smart Climate Controller: reloading entry (options changed)")
     # Just refresh the coordinator - no need to unload/reload
     coordinator = hass.data[DOMAIN].get(entry.entry_id)
     if coordinator:
+        _LOGGER.info("Smart Climate Controller: refreshing coordinator")
         await coordinator.async_refresh()
+    else:
+        _LOGGER.warning("Smart Climate Controller: coordinator not found for reload")
