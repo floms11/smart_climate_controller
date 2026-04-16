@@ -131,11 +131,15 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
 
     async def _process_group(self, group_name: str, room_names: list[str]):
         """Process a multi-split group."""
+        _LOGGER.debug("Processing group %s with rooms: %s", group_name, room_names)
+
         # Step 1: Determine group's actual HVAC mode based on thermostat modes
         group_hvac_mode = self._determine_group_hvac_mode(room_names)
+        _LOGGER.debug("Group %s hvac mode: %s", group_name, group_hvac_mode)
 
         if group_hvac_mode == HVACMode.OFF:
             # Turn off all ACs in the group
+            _LOGGER.debug("Group %s is OFF, turning off all ACs", group_name)
             for room_name in room_names:
                 await self._control_room_climate(room_name, HVACMode.OFF, None)
             return
@@ -147,14 +151,21 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
 
         if physical_mode is None:
             # Cannot determine mode yet, keep off or maintain current
+            _LOGGER.warning("Group %s: cannot determine physical mode", group_name)
             return
+
+        _LOGGER.debug("Group %s: physical mode = %s", group_name, physical_mode)
 
         # Step 3: Control each room's climate based on physical mode
         for room_name in room_names:
             room_state = self._room_states.get(room_name)
             if not room_state or room_state.hvac_mode == HVACMode.OFF:
+                _LOGGER.debug("Room %s: skipping (state=%s, mode=%s)",
+                             room_name, room_state, room_state.hvac_mode if room_state else None)
                 continue
 
+            _LOGGER.debug("Room %s: controlling temperature (physical_mode=%s, target=%.1f)",
+                         room_name, physical_mode, room_state.target_temperature)
             await self._control_room_temperature(room_name, physical_mode)
 
     def _determine_group_hvac_mode(self, room_names: list[str]) -> HVACMode:
@@ -417,11 +428,14 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
         mode_changed = hvac_mode != current_mode
         temp_changed = (
             target_temperature is not None
-            and current_temp is not None
-            and abs(target_temperature - current_temp) > 0.1
+            and (current_temp is None or abs(target_temperature - current_temp) > 0.1)
         )
 
         if not mode_changed and not temp_changed:
+            _LOGGER.debug(
+                "Room %s: no changes needed (mode: %s=%s, temp: %s=%s)",
+                room_name, hvac_mode, current_mode, target_temperature, current_temp
+            )
             return
 
         # Check minimum intervals
@@ -520,12 +534,18 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
         """
         room_state = self._room_states.get(room_name)
         if not room_state:
+            _LOGGER.warning("Room state not found for %s", room_name)
             return
 
         # Update room state
         old_mode = room_state.hvac_mode
         room_state.hvac_mode = hvac_mode
         room_state.last_mode_switch = dt_util.utcnow()
+
+        _LOGGER.info(
+            "Thermostat %s: mode changed from %s to %s",
+            room_name, old_mode, hvac_mode
+        )
 
         # Synchronize group if needed
         room_config = self._get_room_config(room_name)
@@ -534,8 +554,8 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
             if group_name:
                 await self._synchronize_group_modes(group_name, room_name, hvac_mode)
 
-        # Trigger update to refresh all thermostats UI
-        self.async_set_updated_data({})
+        # Trigger immediate update to apply changes
+        await self.async_refresh()
 
     async def _synchronize_group_modes(
         self, group_name: str, initiating_room: str, new_mode: HVACMode
@@ -577,9 +597,14 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
         """Set target temperature for a room's thermostat."""
         room_state = self._room_states.get(room_name)
         if room_state:
+            old_temp = room_state.target_temperature
             room_state.target_temperature = temperature
-            # Trigger update to refresh thermostat UI
-            self.async_set_updated_data({})
+            _LOGGER.info(
+                "Thermostat %s: target temperature changed from %.1f to %.1f (mode: %s)",
+                room_name, old_temp, temperature, room_state.hvac_mode
+            )
+            # Trigger immediate update to apply changes
+            await self.async_refresh()
 
     def get_room_state(self, room_name: str) -> RoomState | None:
         """Get room state."""
