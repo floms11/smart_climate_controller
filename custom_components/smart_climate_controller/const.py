@@ -3,11 +3,15 @@
 DOMAIN = "smart_climate_controller"
 
 # Config/Options keys
-CONF_ROOMS = "rooms"
-CONF_ROOM_NAME = "room_name"
+CONF_AC_UNITS = "ac_units"
+CONF_AC_NAME = "ac_name"
 CONF_CLIMATE_ENTITY = "climate_entity"
 CONF_INDOOR_TEMP_SENSOR = "indoor_temp_sensor"
 CONF_OUTDOOR_TEMP_SENSOR = "outdoor_temp_sensor"
+
+# Legacy keys for backward compatibility
+CONF_ROOMS = "rooms"
+CONF_ROOM_NAME = "room_name"
 CONF_MULTI_SPLIT_GROUP = "multi_split_group"
 
 # Global options

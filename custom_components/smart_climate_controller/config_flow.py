@@ -10,6 +10,8 @@ from homeassistant.core import callback
 from homeassistant.helpers import selector
 
 from .const import (
+    CONF_AC_NAME,
+    CONF_AC_UNITS,
     CONF_CLIMATE_ENTITY,
     CONF_INDOOR_TEMP_SENSOR,
     CONF_MAJOR_CORRECTION_VALUE,
@@ -18,12 +20,9 @@ from .const import (
     CONF_MIN_POWER_SWITCH_INTERVAL,
     CONF_MINOR_CORRECTION_HYSTERESIS,
     CONF_MINOR_CORRECTION_VALUE,
-    CONF_MULTI_SPLIT_GROUP,
     CONF_OUTDOOR_TEMP_COOL_ONLY,
     CONF_OUTDOOR_TEMP_HEAT_ONLY,
     CONF_OUTDOOR_TEMP_SENSOR,
-    CONF_ROOM_NAME,
-    CONF_ROOMS,
     DEFAULT_MAJOR_CORRECTION_VALUE,
     DEFAULT_MAJOR_DEVIATION_THRESHOLD,
     DEFAULT_MIN_MODE_SWITCH_INTERVAL,
@@ -45,52 +44,70 @@ class SmartClimateControllerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN)
 
     def __init__(self):
         """Initialize the config flow."""
-        self._rooms = []
+        self._ac_units = []
+        self._outdoor_temp_sensor = None
 
     async def async_step_user(self, user_input=None):
-        """Handle the initial step."""
-        return await self.async_step_add_room()
-
-    async def async_step_add_room(self, user_input=None):
-        """Handle adding a room."""
+        """Handle the initial step - outdoor sensor."""
         errors = {}
 
         if user_input is not None:
-            # Validate room name is unique
-            room_name = user_input[CONF_ROOM_NAME]
-            if any(room[CONF_ROOM_NAME] == room_name for room in self._rooms):
-                errors[CONF_ROOM_NAME] = "duplicate_room_name"
+            self._outdoor_temp_sensor = user_input[CONF_OUTDOOR_TEMP_SENSOR]
+            return await self.async_step_add_ac()
+
+        schema = vol.Schema(
+            {
+                vol.Required(CONF_OUTDOOR_TEMP_SENSOR): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain="sensor", device_class="temperature")
+                ),
+            }
+        )
+
+        return self.async_show_form(
+            step_id="user",
+            data_schema=schema,
+            errors=errors,
+        )
+
+    async def async_step_add_ac(self, user_input=None):
+        """Handle adding an AC unit."""
+        errors = {}
+
+        if user_input is not None:
+            # Validate AC name is unique
+            ac_name = user_input[CONF_AC_NAME]
+            if any(ac[CONF_AC_NAME] == ac_name for ac in self._ac_units):
+                errors[CONF_AC_NAME] = "duplicate_ac_name"
             else:
-                self._rooms.append(user_input)
+                # Add outdoor sensor to each AC unit
+                ac_unit = user_input.copy()
+                ac_unit[CONF_OUTDOOR_TEMP_SENSOR] = self._outdoor_temp_sensor
+                self._ac_units.append(ac_unit)
                 return await self.async_step_add_another()
 
         schema = vol.Schema(
             {
-                vol.Required(CONF_ROOM_NAME): selector.TextSelector(),
+                vol.Required(CONF_AC_NAME): selector.TextSelector(),
                 vol.Required(CONF_CLIMATE_ENTITY): selector.EntitySelector(
                     selector.EntitySelectorConfig(domain="climate")
                 ),
                 vol.Required(CONF_INDOOR_TEMP_SENSOR): selector.EntitySelector(
                     selector.EntitySelectorConfig(domain="sensor", device_class="temperature")
                 ),
-                vol.Required(CONF_OUTDOOR_TEMP_SENSOR): selector.EntitySelector(
-                    selector.EntitySelectorConfig(domain="sensor", device_class="temperature")
-                ),
-                vol.Optional(CONF_MULTI_SPLIT_GROUP, default=""): selector.TextSelector(),
             }
         )
 
         return self.async_show_form(
-            step_id="add_room",
+            step_id="add_ac",
             data_schema=schema,
             errors=errors,
         )
 
     async def async_step_add_another(self, user_input=None):
-        """Ask if user wants to add another room."""
+        """Ask if user wants to add another AC unit."""
         if user_input is not None:
             if user_input.get("add_another"):
-                return await self.async_step_add_room()
+                return await self.async_step_add_ac()
             return await self.async_step_global_settings()
 
         schema = vol.Schema(
@@ -103,7 +120,7 @@ class SmartClimateControllerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN)
             step_id="add_another",
             data_schema=schema,
             description_placeholders={
-                "rooms_count": str(len(self._rooms)),
+                "ac_count": str(len(self._ac_units)),
             },
         )
 
@@ -112,7 +129,10 @@ class SmartClimateControllerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN)
         if user_input is not None:
             return self.async_create_entry(
                 title="Smart Climate Controller",
-                data={CONF_ROOMS: self._rooms},
+                data={
+                    CONF_AC_UNITS: self._ac_units,
+                    CONF_OUTDOOR_TEMP_SENSOR: self._outdoor_temp_sensor,
+                },
                 options=user_input,
             )
 
@@ -314,5 +334,5 @@ class SmartClimateControllerOptionsFlow(config_entries.OptionsFlow):
         )
 
     async def async_step_manage_rooms(self, user_input=None):
-        """Manage rooms - not implemented yet, requires reload."""
-        return self.async_abort(reason="rooms_require_reconfiguration")
+        """Manage AC units - not implemented yet, requires reload."""
+        return self.async_abort(reason="ac_units_require_reconfiguration")

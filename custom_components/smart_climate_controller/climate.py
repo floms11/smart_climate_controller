@@ -12,7 +12,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import CONF_ROOM_NAME, CONF_ROOMS, DOMAIN
+from .const import CONF_AC_NAME, CONF_AC_UNITS, CONF_ROOM_NAME, CONF_ROOMS, DOMAIN
 from .coordinator import SmartClimateCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -27,9 +27,16 @@ async def async_setup_entry(
     coordinator: SmartClimateCoordinator = hass.data[DOMAIN][entry.entry_id]
 
     entities = []
-    for room_config in entry.data.get(CONF_ROOMS, []):
-        room_name = room_config[CONF_ROOM_NAME]
-        entities.append(SmartClimateThermostat(coordinator, room_name))
+    # New format: CONF_AC_UNITS
+    if CONF_AC_UNITS in entry.data:
+        for ac_config in entry.data.get(CONF_AC_UNITS, []):
+            ac_name = ac_config[CONF_AC_NAME]
+            entities.append(SmartClimateThermostat(coordinator, ac_name))
+    # Legacy format: CONF_ROOMS
+    else:
+        for room_config in entry.data.get(CONF_ROOMS, []):
+            room_name = room_config[CONF_ROOM_NAME]
+            entities.append(SmartClimateThermostat(coordinator, room_name))
 
     async_add_entities(entities)
 

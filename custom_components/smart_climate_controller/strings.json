@@ -1,22 +1,27 @@
 {
   "config": {
     "step": {
-      "add_room": {
-        "title": "Add Room",
-        "description": "Configure a room for climate control",
+      "user": {
+        "title": "Configure Multi-Split System",
+        "description": "First, select the outdoor temperature sensor (shared by all AC units)",
         "data": {
-          "room_name": "Room Name",
-          "climate_entity": "Air Conditioner",
-          "indoor_temp_sensor": "Indoor Temperature Sensor",
-          "outdoor_temp_sensor": "Outdoor Temperature Sensor",
-          "multi_split_group": "Multi-Split Group (optional)"
+          "outdoor_temp_sensor": "Outdoor Temperature Sensor"
+        }
+      },
+      "add_ac": {
+        "title": "Add AC Unit",
+        "description": "Add an air conditioner to your multi-split system",
+        "data": {
+          "ac_name": "AC Unit Name",
+          "climate_entity": "Climate Entity",
+          "indoor_temp_sensor": "Indoor Temperature Sensor"
         }
       },
       "add_another": {
-        "title": "Add Another Room?",
-        "description": "You have added {rooms_count} room(s). Add another?",
+        "title": "Add Another AC?",
+        "description": "You have added {ac_count} AC unit(s). Add another?",
         "data": {
-          "add_another": "Add another room"
+          "add_another": "Add another AC unit"
         }
       },
       "global_settings": {
@@ -35,7 +40,7 @@
       }
     },
     "error": {
-      "duplicate_room_name": "Room name already exists"
+      "duplicate_ac_name": "AC unit name already exists"
     },
     "abort": {
       "already_configured": "Integration is already configured"
@@ -47,7 +52,7 @@
         "title": "Smart Climate Controller Options",
         "menu_options": {
           "global_settings": "Global Settings",
-          "manage_rooms": "Manage Rooms"
+          "manage_rooms": "Manage AC Units"
         }
       },
       "global_settings": {
@@ -66,7 +71,7 @@
       }
     },
     "abort": {
-      "rooms_require_reconfiguration": "To change rooms, please remove and re-add the integration"
+      "ac_units_require_reconfiguration": "To change AC units, please remove and re-add the integration"
     }
   }
 }
