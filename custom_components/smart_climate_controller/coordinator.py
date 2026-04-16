@@ -475,13 +475,17 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
 
         # Apply changes
         _LOGGER.info(
-            "Room %s: setting climate to mode=%s, temp=%s (current: mode=%s, temp=%s)",
-            room_name, hvac_mode, target_temperature, current_mode, current_temp
+            "Room %s: APPLYING CHANGES to %s - mode=%s, temp=%s (current: mode=%s, temp=%s)",
+            room_name, climate_entity_id, hvac_mode, target_temperature, current_mode, current_temp
         )
 
         try:
             # Always change mode first if needed
             if mode_changed:
+                _LOGGER.info(
+                    "Room %s: calling climate.set_hvac_mode with entity_id=%s, hvac_mode=%s",
+                    room_name, climate_entity_id, hvac_mode
+                )
                 await self.hass.services.async_call(
                     "climate",
                     "set_hvac_mode",
@@ -498,10 +502,14 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
                 ):
                     room_state.last_power_switch = now
 
-                _LOGGER.info("Room %s: mode changed to %s", room_name, hvac_mode)
+                _LOGGER.info("Room %s: ✓ Mode successfully changed to %s", room_name, hvac_mode)
 
             # Then set temperature if needed and AC is not OFF
             if temp_changed and hvac_mode != HVACMode.OFF and target_temperature is not None:
+                _LOGGER.info(
+                    "Room %s: calling climate.set_temperature with entity_id=%s, temperature=%s",
+                    room_name, climate_entity_id, target_temperature
+                )
                 await self.hass.services.async_call(
                     "climate",
                     "set_temperature",
@@ -511,10 +519,10 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
                     },
                     blocking=True,
                 )
-                _LOGGER.info("Room %s: temperature set to %s", room_name, target_temperature)
+                _LOGGER.info("Room %s: ✓ Temperature successfully set to %s", room_name, target_temperature)
 
         except Exception as err:
-            _LOGGER.error("Error controlling climate %s: %s", climate_entity_id, err)
+            _LOGGER.error("Room %s: ✗ ERROR controlling climate %s: %s", room_name, climate_entity_id, err)
 
     def _get_sensor_temperature(self, entity_id: str) -> float | None:
         """Get temperature from sensor."""
@@ -552,10 +560,22 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
         if room_config:
             group_name = room_config.get(CONF_MULTI_SPLIT_GROUP, "").strip()
             if group_name:
+                _LOGGER.debug("Synchronizing group %s after mode change in %s", group_name, room_name)
                 await self._synchronize_group_modes(group_name, room_name, hvac_mode)
 
-        # Trigger immediate update to apply changes and refresh UI
-        await self.async_request_refresh()
+        # Save state immediately
+        await self._save_state()
+
+        # Notify all listeners that data has changed (updates UI)
+        self.async_set_updated_data({})
+
+        # Trigger processing to apply changes to physical ACs
+        try:
+            groups = self._get_multi_split_groups()
+            for group_name, room_names in groups.items():
+                await self._process_group(group_name, room_names)
+        except Exception as err:
+            _LOGGER.error("Error processing groups after mode change: %s", err)
 
     async def _synchronize_group_modes(
         self, group_name: str, initiating_room: str, new_mode: HVACMode
@@ -567,6 +587,7 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
         """
         if new_mode == HVACMode.OFF:
             # OFF mode doesn't trigger synchronization
+            _LOGGER.debug("Skipping synchronization for OFF mode in group %s", group_name)
             return
 
         # Find all rooms in this group
@@ -575,36 +596,61 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
             if room_config.get(CONF_MULTI_SPLIT_GROUP, "").strip() == group_name:
                 group_rooms.append(room_config[CONF_ROOM_NAME])
 
+        _LOGGER.debug("Group %s rooms: %s, initiating room: %s", group_name, group_rooms, initiating_room)
+
         # Update other rooms in the group
+        synchronized_count = 0
         for room_name in group_rooms:
             if room_name == initiating_room:
                 continue
 
             room_state = self._room_states.get(room_name)
             if not room_state:
+                _LOGGER.warning("Room state not found for %s during synchronization", room_name)
                 continue
 
             # Only synchronize if room is not OFF
             if room_state.hvac_mode != HVACMode.OFF:
-                _LOGGER.info(
-                    "Synchronizing room %s to mode %s (group %s)",
-                    room_name, new_mode, group_name
-                )
+                old_mode = room_state.hvac_mode
                 room_state.hvac_mode = new_mode
                 room_state.last_mode_switch = dt_util.utcnow()
+                synchronized_count += 1
+                _LOGGER.info(
+                    "Synchronized room %s: %s -> %s (group %s)",
+                    room_name, old_mode, new_mode, group_name
+                )
+            else:
+                _LOGGER.debug("Skipping room %s: already OFF", room_name)
+
+        _LOGGER.info("Synchronized %d rooms in group %s to mode %s", synchronized_count, group_name, new_mode)
 
     async def set_room_temperature(self, room_name: str, temperature: float):
         """Set target temperature for a room's thermostat."""
         room_state = self._room_states.get(room_name)
-        if room_state:
-            old_temp = room_state.target_temperature
-            room_state.target_temperature = temperature
-            _LOGGER.info(
-                "Thermostat %s: target temperature changed from %.1f to %.1f (mode: %s)",
-                room_name, old_temp, temperature, room_state.hvac_mode
-            )
-            # Trigger immediate update to apply changes and refresh UI
-            await self.async_request_refresh()
+        if not room_state:
+            _LOGGER.warning("Room state not found for %s", room_name)
+            return
+
+        old_temp = room_state.target_temperature
+        room_state.target_temperature = temperature
+        _LOGGER.info(
+            "Thermostat %s: target temperature changed from %.1f to %.1f (mode: %s)",
+            room_name, old_temp, temperature, room_state.hvac_mode
+        )
+
+        # Save state immediately
+        await self._save_state()
+
+        # Notify all listeners that data has changed (updates UI)
+        self.async_set_updated_data({})
+
+        # Trigger processing to apply changes to physical ACs
+        try:
+            groups = self._get_multi_split_groups()
+            for group_name, room_names in groups.items():
+                await self._process_group(group_name, room_names)
+        except Exception as err:
+            _LOGGER.error("Error processing groups after temperature change: %s", err)
 
     def get_room_state(self, room_name: str) -> RoomState | None:
         """Get room state."""
