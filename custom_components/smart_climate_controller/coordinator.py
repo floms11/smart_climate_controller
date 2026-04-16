@@ -460,41 +460,45 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
                     return
 
         # Apply changes
-        service_data = {"entity_id": climate_entity_id}
-
-        if mode_changed:
-            service_data["hvac_mode"] = hvac_mode
-            room_state.last_mode_switch = now
-
-            if (current_mode == HVACMode.OFF and hvac_mode != HVACMode.OFF) or (
-                current_mode != HVACMode.OFF and hvac_mode == HVACMode.OFF
-            ):
-                room_state.last_power_switch = now
-
-        if target_temperature is not None and hvac_mode != HVACMode.OFF:
-            service_data["temperature"] = target_temperature
-
         _LOGGER.info(
-            "Room %s: setting climate to %s (temp: %s)",
-            room_name, hvac_mode, target_temperature
+            "Room %s: setting climate to mode=%s, temp=%s (current: mode=%s, temp=%s)",
+            room_name, hvac_mode, target_temperature, current_mode, current_temp
         )
 
         try:
-            await self.hass.services.async_call(
-                "climate",
-                "set_temperature" if not mode_changed else "set_hvac_mode",
-                service_data,
-                blocking=True,
-            )
+            # Always change mode first if needed
+            if mode_changed:
+                await self.hass.services.async_call(
+                    "climate",
+                    "set_hvac_mode",
+                    {
+                        "entity_id": climate_entity_id,
+                        "hvac_mode": hvac_mode,
+                    },
+                    blocking=True,
+                )
+                room_state.last_mode_switch = now
 
-            # If both mode and temperature need changing, send second command
-            if mode_changed and target_temperature is not None and hvac_mode != HVACMode.OFF:
+                if (current_mode == HVACMode.OFF and hvac_mode != HVACMode.OFF) or (
+                    current_mode != HVACMode.OFF and hvac_mode == HVACMode.OFF
+                ):
+                    room_state.last_power_switch = now
+
+                _LOGGER.info("Room %s: mode changed to %s", room_name, hvac_mode)
+
+            # Then set temperature if needed and AC is not OFF
+            if temp_changed and hvac_mode != HVACMode.OFF and target_temperature is not None:
                 await self.hass.services.async_call(
                     "climate",
                     "set_temperature",
-                    {"entity_id": climate_entity_id, "temperature": target_temperature},
+                    {
+                        "entity_id": climate_entity_id,
+                        "temperature": target_temperature,
+                    },
                     blocking=True,
                 )
+                _LOGGER.info("Room %s: temperature set to %s", room_name, target_temperature)
+
         except Exception as err:
             _LOGGER.error("Error controlling climate %s: %s", climate_entity_id, err)
 
@@ -530,7 +534,8 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
             if group_name:
                 await self._synchronize_group_modes(group_name, room_name, hvac_mode)
 
-        await self.async_request_refresh()
+        # Trigger update to refresh all thermostats UI
+        self.async_set_updated_data({})
 
     async def _synchronize_group_modes(
         self, group_name: str, initiating_room: str, new_mode: HVACMode
@@ -573,7 +578,8 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
         room_state = self._room_states.get(room_name)
         if room_state:
             room_state.target_temperature = temperature
-            await self.async_request_refresh()
+            # Trigger update to refresh thermostat UI
+            self.async_set_updated_data({})
 
     def get_room_state(self, room_name: str) -> RoomState | None:
         """Get room state."""
