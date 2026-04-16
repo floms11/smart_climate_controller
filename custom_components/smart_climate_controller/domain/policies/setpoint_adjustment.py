@@ -2,6 +2,8 @@
 import logging
 from typing import Optional
 
+from homeassistant.util import dt as dt_util
+
 from .base import SetpointAdjustmentPolicy
 from ..value_objects import HVACMode, ControlContext, Temperature
 
@@ -90,7 +92,14 @@ class IterativeSetpointAdjustmentPolicy(SetpointAdjustmentPolicy):
 
         # Check if enough time passed since last adjustment
         if hasattr(context, 'last_setpoint_adjustment') and context.last_setpoint_adjustment is not None:
-            time_since_adjustment = (context.now - context.last_setpoint_adjustment).total_seconds()
+            # Ensure last_setpoint_adjustment is timezone-aware
+            last_adjustment = context.last_setpoint_adjustment
+            if last_adjustment.tzinfo is None:
+                # Convert naive datetime to timezone-aware
+                last_adjustment = dt_util.as_utc(last_adjustment)
+                _LOGGER.warning("last_setpoint_adjustment was timezone-naive, converted to UTC")
+
+            time_since_adjustment = (context.now - last_adjustment).total_seconds()
             adjustment_interval = getattr(context, 'setpoint_adjustment_interval', 120)
 
             if time_since_adjustment < adjustment_interval:

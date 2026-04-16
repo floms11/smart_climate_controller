@@ -363,7 +363,13 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
             # If we sent a command in the last 3 seconds, this is probably our change
             now = dt_util.utcnow()
             if self.last_command_sent:
-                seconds_since_command = (now - self.last_command_sent).total_seconds()
+                # Ensure last_command_sent is timezone-aware
+                last_cmd = self.last_command_sent
+                if last_cmd.tzinfo is None:
+                    last_cmd = dt_util.as_utc(last_cmd)
+                    _LOGGER.warning("last_command_sent was timezone-naive, converted to UTC")
+
+                seconds_since_command = (now - last_cmd).total_seconds()
                 if seconds_since_command < 3:
                     _LOGGER.debug(
                         "Mode change happened %.1fs after our command - this is our change, not user's. Ignoring.",

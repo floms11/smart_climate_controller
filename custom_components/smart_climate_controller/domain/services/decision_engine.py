@@ -2,6 +2,8 @@
 import logging
 from typing import Optional
 
+from homeassistant.util import dt as dt_util
+
 from ..value_objects import (
     ControlContext,
     ControlDecision,
@@ -197,7 +199,13 @@ class ClimateDecisionEngine:
         if context.last_run_start is None:
             return True, "No run time restriction"
 
-        elapsed = (context.now - context.last_run_start).total_seconds()
+        # Ensure last_run_start is timezone-aware
+        last_run = context.last_run_start
+        if last_run.tzinfo is None:
+            last_run = dt_util.as_utc(last_run)
+            _LOGGER.warning("last_run_start was timezone-naive, converted to UTC")
+
+        elapsed = (context.now - last_run).total_seconds()
         if elapsed < context.min_run_time:
             remaining = context.min_run_time - elapsed
             return False, f"Min run time not met, {remaining:.0f}s remaining"
@@ -214,7 +222,13 @@ class ClimateDecisionEngine:
         if context.last_idle_start is None:
             return True, "No idle time restriction"
 
-        elapsed = (context.now - context.last_idle_start).total_seconds()
+        # Ensure last_idle_start is timezone-aware
+        last_idle = context.last_idle_start
+        if last_idle.tzinfo is None:
+            last_idle = dt_util.as_utc(last_idle)
+            _LOGGER.warning("last_idle_start was timezone-naive, converted to UTC")
+
+        elapsed = (context.now - last_idle).total_seconds()
         if elapsed < context.min_idle_time:
             remaining = context.min_idle_time - elapsed
             return False, f"Min idle time not met, {remaining:.0f}s remaining"
