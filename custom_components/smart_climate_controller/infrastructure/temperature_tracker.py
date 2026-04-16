@@ -100,24 +100,46 @@ class TemperatureTracker:
                 break
 
         if oldest_temp is None or oldest_time is None:
+            _LOGGER.debug("No measurements found within %d minute window", minutes)
             return None
 
         # Calculate time delta in hours
         time_delta = (latest_time - oldest_time).total_seconds() / 3600.0
 
-        if time_delta < 0.01:  # Less than 36 seconds
+        # Require minimum time span - at least 50% of requested window
+        min_time_delta = (minutes * 0.5) / 60.0  # Convert to hours
+        if time_delta < min_time_delta:
+            _LOGGER.debug(
+                "Time span too short: %.1f min (need at least %.1f min for %d min window)",
+                time_delta * 60,
+                min_time_delta * 60,
+                minutes
+            )
             return None
 
         # Calculate rate (°C per hour)
         temp_delta = latest_temp - oldest_temp
         rate = temp_delta / time_delta
 
+        # Sanity check: rate should be reasonable (not more than ±10°C/hour)
+        if abs(rate) > 10.0:
+            _LOGGER.warning(
+                "Calculated rate %.2f°C/h seems unreasonable, returning None (%.2f°C over %.1f min)",
+                rate,
+                temp_delta,
+                time_delta * 60,
+            )
+            return None
+
+        # For stable temperature (no change), rate will be exactly 0
+        # This is correct for wireless sensors that don't send updates when stable
         _LOGGER.debug(
-            "Temperature rate (%d min window): %.2f°C/h (%.2f°C over %.1f min)",
+            "Temperature rate (%d min window): %.2f°C/h (%.3f°C over %.1f min, %d measurements)",
             minutes,
             rate,
             temp_delta,
             time_delta * 60,
+            len(self._history),
         )
 
         return rate
