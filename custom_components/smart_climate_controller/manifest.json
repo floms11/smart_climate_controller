@@ -1,0 +1,12 @@
+{
+  "domain": "smart_climate_controller",
+  "name": "Smart Climate Controller",
+  "codeowners": ["@floms"],
+  "config_flow": true,
+  "dependencies": [],
+  "documentation": "https://github.com/floms/smart_climate_controller",
+  "iot_class": "calculated",
+  "issue_tracker": "https://github.com/floms/smart_climate_controller/issues",
+  "requirements": [],
+  "version": "0.1.0"
+}

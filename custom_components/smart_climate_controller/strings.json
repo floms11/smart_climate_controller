@@ -1,0 +1,40 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Smart Climate Controller Setup",
+        "description": "Configure your smart climate control zone",
+        "data": {
+          "zone_name": "Zone Name",
+          "climate_entity": "Climate Device (AC)",
+          "room_temp_sensor": "Room Temperature Sensor",
+          "outdoor_temp_sensor": "Outdoor Temperature Sensor",
+          "target_temp": "Target Temperature"
+        }
+      }
+    },
+    "error": {
+      "entity_not_found": "Entity not found"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Advanced Settings",
+        "description": "Configure advanced control parameters",
+        "data": {
+          "target_temp": "Target Temperature",
+          "deadband": "Deadband (Stabilization Zone)",
+          "min_room_temp": "Minimum Room Temperature",
+          "max_room_temp": "Maximum Room Temperature",
+          "base_offset": "Base AC Offset",
+          "outdoor_heat_threshold": "Outdoor Heating Threshold",
+          "outdoor_cool_threshold": "Outdoor Cooling Threshold",
+          "mode_switch_hysteresis": "Mode Switch Hysteresis",
+          "min_mode_switch_interval": "Minimum Mode Switch Interval",
+          "control_interval": "Control Cycle Interval"
+        }
+      }
+    }
+  }
+}
