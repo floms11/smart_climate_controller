@@ -226,14 +226,7 @@ class SmartClimateControllerOptionsFlow(config_entries.OptionsFlow):
 
     async def async_step_init(self, user_input=None):
         """Manage the options."""
-        return await self.async_step_menu()
-
-    async def async_step_menu(self, user_input=None):
-        """Show menu."""
-        return self.async_show_menu(
-            step_id="menu",
-            menu_options=["global_settings", "manage_rooms"],
-        )
+        return await self.async_step_global_settings(user_input)
 
     async def async_step_global_settings(self, user_input=None):
         """Handle global settings."""
@@ -332,7 +325,3 @@ class SmartClimateControllerOptionsFlow(config_entries.OptionsFlow):
             step_id="global_settings",
             data_schema=schema,
         )
-
-    async def async_step_manage_rooms(self, user_input=None):
-        """Manage AC units - not implemented yet, requires reload."""
-        return self.async_abort(reason="ac_units_require_reconfiguration")
