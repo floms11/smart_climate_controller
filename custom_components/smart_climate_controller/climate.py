@@ -48,6 +48,9 @@ class SmartClimateThermostat(CoordinatorEntity, ClimateEntity):
         HVACMode.COOL,
         HVACMode.AUTO,
     ]
+    _attr_min_temp = 16.0
+    _attr_max_temp = 30.0
+    _attr_target_temperature_step = 0.5
 
     def __init__(self, coordinator: SmartClimateCoordinator, room_name: str):
         """Initialize the thermostat."""

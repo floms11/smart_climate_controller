@@ -49,7 +49,7 @@ class RoomState:
     def __init__(self, room_name: str):
         """Initialize room state."""
         self.room_name = room_name
-        self.target_temperature: float | None = None
+        self.target_temperature: float = 22.0  # Default temperature
         self.hvac_mode: HVACMode = HVACMode.OFF
         self.last_mode_switch: datetime | None = None
         self.last_power_switch: datetime | None = None
@@ -289,9 +289,6 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
             if not room_state or not room_config or room_state.hvac_mode == HVACMode.OFF:
                 continue
 
-            if room_state.target_temperature is None:
-                continue
-
             indoor_temp = self._get_sensor_temperature(room_config[CONF_INDOOR_TEMP_SENSOR])
             if indoor_temp is None:
                 continue
@@ -330,9 +327,6 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
         room_config = self._get_room_config(room_name)
 
         if not room_state or not room_config:
-            return
-
-        if room_state.target_temperature is None:
             return
 
         indoor_temp = self._get_sensor_temperature(room_config[CONF_INDOOR_TEMP_SENSOR])
