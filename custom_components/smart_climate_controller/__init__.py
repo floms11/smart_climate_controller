@@ -18,11 +18,53 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Smart Climate Controller from a config entry."""
     _LOGGER.info("Setting up Smart Climate Controller: %s", entry.data.get("zone_name"))
 
+    # Migrate old entries to include missing default values
+    from .const import (
+        DEFAULT_DEADBAND, DEFAULT_MIN_ROOM_TEMP, DEFAULT_MAX_ROOM_TEMP,
+        DEFAULT_MIN_AC_SETPOINT, DEFAULT_MAX_AC_SETPOINT, DEFAULT_BASE_OFFSET,
+        DEFAULT_DYNAMIC_RATE_FACTOR, DEFAULT_MAX_DYNAMIC_OFFSET,
+        DEFAULT_OUTDOOR_HEAT_THRESHOLD, DEFAULT_OUTDOOR_COOL_THRESHOLD,
+        DEFAULT_MODE_SWITCH_HYSTERESIS, DEFAULT_MIN_COMMAND_INTERVAL,
+        DEFAULT_MIN_MODE_SWITCH_INTERVAL, DEFAULT_CONTROL_INTERVAL,
+        DEFAULT_ENABLE_DEBUG_SENSORS,
+    )
+
+    updated_data = dict(entry.data)
+    needs_update = False
+
+    # Add missing defaults
+    defaults = {
+        "deadband": DEFAULT_DEADBAND,
+        "min_room_temp": DEFAULT_MIN_ROOM_TEMP,
+        "max_room_temp": DEFAULT_MAX_ROOM_TEMP,
+        "min_ac_setpoint": DEFAULT_MIN_AC_SETPOINT,
+        "max_ac_setpoint": DEFAULT_MAX_AC_SETPOINT,
+        "base_offset": DEFAULT_BASE_OFFSET,
+        "dynamic_rate_factor": DEFAULT_DYNAMIC_RATE_FACTOR,
+        "max_dynamic_offset": DEFAULT_MAX_DYNAMIC_OFFSET,
+        "outdoor_heat_threshold": DEFAULT_OUTDOOR_HEAT_THRESHOLD,
+        "outdoor_cool_threshold": DEFAULT_OUTDOOR_COOL_THRESHOLD,
+        "mode_switch_hysteresis": DEFAULT_MODE_SWITCH_HYSTERESIS,
+        "min_command_interval": DEFAULT_MIN_COMMAND_INTERVAL,
+        "min_mode_switch_interval": DEFAULT_MIN_MODE_SWITCH_INTERVAL,
+        "control_interval": DEFAULT_CONTROL_INTERVAL,
+        "enable_debug_sensors": DEFAULT_ENABLE_DEBUG_SENSORS,
+    }
+
+    for key, default_value in defaults.items():
+        if key not in updated_data:
+            updated_data[key] = default_value
+            needs_update = True
+            _LOGGER.info("Adding missing config key '%s' with default value: %s", key, default_value)
+
+    if needs_update:
+        hass.config_entries.async_update_entry(entry, data=updated_data)
+
     # Create coordinator
     coordinator = SmartClimateCoordinator(
         hass=hass,
         entry_id=entry.entry_id,
-        config=dict(entry.data),
+        config=dict(updated_data),
     )
 
     # Store coordinator

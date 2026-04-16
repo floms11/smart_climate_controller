@@ -156,7 +156,11 @@ class SmartClimateControllerOptionsFlow(config_entries.OptionsFlow):
         # Get current values
         data = self.config_entry.data
 
-        options_schema = vol.Schema({
+        # Log current data for debugging
+        _LOGGER.debug("Options flow - current data keys: %s", list(data.keys()))
+
+        try:
+            options_schema = vol.Schema({
             vol.Optional(
                 CONF_MULTI_SPLIT_GROUP,
                 default=data.get(CONF_MULTI_SPLIT_GROUP, "")
@@ -189,7 +193,7 @@ class SmartClimateControllerOptionsFlow(config_entries.OptionsFlow):
                 CONF_BASE_OFFSET,
                 default=data.get(CONF_BASE_OFFSET, DEFAULT_BASE_OFFSET)
             ): NumberSelector(
-                NumberSelectorConfig(min=0.5, max=10, step=0.5, mode=NumberSelectorMode.BOX, unit_of_measurement="°C")
+                NumberSelectorConfig(min=0.0, max=10, step=0.5, mode=NumberSelectorMode.BOX, unit_of_measurement="°C")
             ),
             vol.Required(
                 CONF_OUTDOOR_HEAT_THRESHOLD,
@@ -221,9 +225,23 @@ class SmartClimateControllerOptionsFlow(config_entries.OptionsFlow):
             ): NumberSelector(
                 NumberSelectorConfig(min=30, max=300, step=10, mode=NumberSelectorMode.BOX, unit_of_measurement="s")
             ),
-        })
+            })
 
-        return self.async_show_form(
-            step_id="init",
-            data_schema=options_schema,
-        )
+            return self.async_show_form(
+                step_id="init",
+                data_schema=options_schema,
+            )
+        except Exception as e:
+            _LOGGER.error("Error creating options schema: %s", e, exc_info=True)
+            # Return a minimal form if there's an error
+            return self.async_show_form(
+                step_id="init",
+                data_schema=vol.Schema({
+                    vol.Required(
+                        CONF_TARGET_TEMP,
+                        default=data.get(CONF_TARGET_TEMP, DEFAULT_TARGET_TEMP)
+                    ): NumberSelector(
+                        NumberSelectorConfig(min=10, max=35, step=0.5, mode=NumberSelectorMode.BOX, unit_of_measurement="°C")
+                    ),
+                }),
+            )

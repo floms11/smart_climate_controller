@@ -40,7 +40,11 @@
           "control_interval": "Control Cycle Interval"
         },
         "data_description": {
-          "multi_split_group": "Group ID for multi-split systems. All zones with the same ID will operate in the same mode. Leave empty to remove from group."
+          "multi_split_group": "Group ID for multi-split systems. All zones with the same ID will operate in the same mode. Leave empty to remove from group.",
+          "base_offset": "Temperature offset for AC setpoint. 0 = AC temp matches target, 2 = AC is 2°C colder (cooling) or warmer (heating) than target.",
+          "deadband": "Temperature range around target where no action is taken.",
+          "outdoor_heat_threshold": "Outdoor temperature below which heating is preferred.",
+          "outdoor_cool_threshold": "Outdoor temperature above which cooling is preferred."
         }
       }
     }
