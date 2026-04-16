@@ -48,8 +48,43 @@ class DynamicSetpointAdjustmentPolicy(SetpointAdjustmentPolicy):
         else:
             base_direction = 0
 
-        # Start with base offset
-        total_offset = context.base_offset * base_direction
+        # Check if we're overshooting (temperature going past target in wrong direction)
+        # For COOL: overshooting if temp < target (too cold)
+        # For HEAT: overshooting if temp > target (too hot)
+        is_overshooting = False
+        if mode == HVACMode.COOL and temp_error < -context.deadband:
+            is_overshooting = True
+        elif mode == HVACMode.HEAT and temp_error > context.deadband:
+            is_overshooting = True
+
+        # Start with base offset, but reduce or invert if overshooting
+        if is_overshooting:
+            # Overshooting: move setpoint closer to or past target to reduce AC power
+            # The further past target we are, the more we reduce offset
+            overshoot_magnitude = abs(temp_error) - context.deadband
+
+            # Reduce base offset proportionally to overshoot
+            # If overshoot is small (0-1°C): reduce offset by 50-100%
+            # If overshoot is large (>1°C): invert offset completely
+            reduction_factor = min(1.0, overshoot_magnitude / 1.0)  # 0.0 to 1.0
+
+            if overshoot_magnitude > 1.0:
+                # Large overshoot: invert offset (set AC warmer when cooling, colder when heating)
+                total_offset = -context.base_offset * base_direction * reduction_factor
+                _LOGGER.debug(
+                    "Large overshoot (%.1f°C past target), inverting offset: %.1f",
+                    overshoot_magnitude, total_offset
+                )
+            else:
+                # Small overshoot: reduce offset
+                total_offset = context.base_offset * base_direction * (1.0 - reduction_factor)
+                _LOGGER.debug(
+                    "Small overshoot (%.1f°C past target), reducing offset: %.1f",
+                    overshoot_magnitude, total_offset
+                )
+        else:
+            # Normal operation: use full base offset
+            total_offset = context.base_offset * base_direction
 
         # Add dynamic offset based on error magnitude
         # Larger error -> larger offset (more aggressive)
@@ -92,12 +127,20 @@ class DynamicSetpointAdjustmentPolicy(SetpointAdjustmentPolicy):
         setpoint = Temperature(clamped_setpoint)
 
         # Build reason string
-        reason_parts = [f"base={context.base_offset * base_direction:.1f}"]
+        if is_overshooting:
+            overshoot_mag = abs(temp_error) - context.deadband
+            reason_parts = [f"OVERSHOOT={overshoot_mag:.1f}°C"]
+            reason_parts.append(f"base_reduced={total_offset:.1f}")
+        else:
+            reason_parts = [f"base={context.base_offset * base_direction:.1f}"]
+
         if error_based_offset != 0:
             reason_parts.append(f"error={error_based_offset:.1f}")
         if rate_based_offset != 0:
             reason_parts.append(f"rate={rate_based_offset:.1f}")
-        reason_parts.append(f"total={total_offset:.1f}")
+
+        if not is_overshooting:
+            reason_parts.append(f"total={total_offset:.1f}")
 
         if raw_setpoint != clamped_setpoint:
             reason_parts.append("clamped")
