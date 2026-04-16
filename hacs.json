@@ -1,7 +1,0 @@
-{
-  "name": "Smart Climate Controller",
-  "render_readme": true,
-  "domains": ["climate", "sensor"],
-  "iot_class": "calculated",
-  "homeassistant": "2024.1.0"
-}

@@ -1,63 +1,38 @@
 """Config flow for Smart Climate Controller."""
 import logging
-from typing import Any, Optional
+from typing import Any
 
 import voluptuous as vol
 
 from homeassistant import config_entries
+from homeassistant.const import CONF_NAME
 from homeassistant.core import callback
 from homeassistant.helpers import selector
-from homeassistant.helpers.selector import (
-    EntitySelector,
-    EntitySelectorConfig,
-    NumberSelector,
-    NumberSelectorConfig,
-    NumberSelectorMode,
-    TextSelector,
-)
 
 from .const import (
-    DOMAIN,
-    CONF_ZONE_NAME,
     CONF_CLIMATE_ENTITY,
-    CONF_ROOM_TEMP_SENSOR,
-    CONF_OUTDOOR_TEMP_SENSOR,
-    CONF_TARGET_TEMP,
-    CONF_DEADBAND,
-    CONF_MIN_ROOM_TEMP,
-    CONF_MAX_ROOM_TEMP,
-    CONF_MIN_AC_SETPOINT,
-    CONF_MAX_AC_SETPOINT,
-    CONF_OUTDOOR_HEAT_THRESHOLD,
-    CONF_OUTDOOR_COOL_THRESHOLD,
-    CONF_MODE_SWITCH_HYSTERESIS,
-    CONF_MIN_COMMAND_INTERVAL,
+    CONF_INDOOR_TEMP_SENSOR,
+    CONF_MAJOR_CORRECTION_VALUE,
+    CONF_MAJOR_DEVIATION_THRESHOLD,
     CONF_MIN_MODE_SWITCH_INTERVAL,
-    CONF_CONTROL_INTERVAL,
-    CONF_ENABLE_DEBUG_SENSORS,
+    CONF_MIN_POWER_SWITCH_INTERVAL,
+    CONF_MINOR_CORRECTION_HYSTERESIS,
+    CONF_MINOR_CORRECTION_VALUE,
     CONF_MULTI_SPLIT_GROUP,
-    CONF_MIN_RUN_TIME,
-    CONF_MIN_IDLE_TIME,
-    CONF_SETPOINT_ADJUSTMENT_INTERVAL,
-    CONF_SETPOINT_STEP,
-    DEFAULT_ZONE_NAME,
-    DEFAULT_TARGET_TEMP,
-    DEFAULT_DEADBAND,
-    DEFAULT_MIN_ROOM_TEMP,
-    DEFAULT_MAX_ROOM_TEMP,
-    DEFAULT_MIN_AC_SETPOINT,
-    DEFAULT_MAX_AC_SETPOINT,
-    DEFAULT_OUTDOOR_HEAT_THRESHOLD,
-    DEFAULT_OUTDOOR_COOL_THRESHOLD,
-    DEFAULT_MODE_SWITCH_HYSTERESIS,
-    DEFAULT_MIN_COMMAND_INTERVAL,
+    CONF_OUTDOOR_TEMP_COOL_ONLY,
+    CONF_OUTDOOR_TEMP_HEAT_ONLY,
+    CONF_OUTDOOR_TEMP_SENSOR,
+    CONF_ROOM_NAME,
+    CONF_ROOMS,
+    DEFAULT_MAJOR_CORRECTION_VALUE,
+    DEFAULT_MAJOR_DEVIATION_THRESHOLD,
     DEFAULT_MIN_MODE_SWITCH_INTERVAL,
-    DEFAULT_CONTROL_INTERVAL,
-    DEFAULT_ENABLE_DEBUG_SENSORS,
-    DEFAULT_MIN_RUN_TIME,
-    DEFAULT_MIN_IDLE_TIME,
-    DEFAULT_SETPOINT_ADJUSTMENT_INTERVAL,
-    DEFAULT_SETPOINT_STEP,
+    DEFAULT_MIN_POWER_SWITCH_INTERVAL,
+    DEFAULT_MINOR_CORRECTION_HYSTERESIS,
+    DEFAULT_MINOR_CORRECTION_VALUE,
+    DEFAULT_OUTDOOR_TEMP_COOL_ONLY,
+    DEFAULT_OUTDOOR_TEMP_HEAT_ONLY,
+    DOMAIN,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -68,201 +43,276 @@ class SmartClimateControllerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN)
 
     VERSION = 1
 
-    async def async_step_user(self, user_input: Optional[dict[str, Any]] = None):
+    def __init__(self):
+        """Initialize the config flow."""
+        self._rooms = []
+
+    async def async_step_user(self, user_input=None):
         """Handle the initial step."""
+        return await self.async_step_add_room()
+
+    async def async_step_add_room(self, user_input=None):
+        """Handle adding a room."""
         errors = {}
 
         if user_input is not None:
-            # Validate entities exist
-            climate_entity = user_input[CONF_CLIMATE_ENTITY]
-            room_sensor = user_input[CONF_ROOM_TEMP_SENSOR]
-            outdoor_sensor = user_input[CONF_OUTDOOR_TEMP_SENSOR]
+            # Validate room name is unique
+            room_name = user_input[CONF_ROOM_NAME]
+            if any(room[CONF_ROOM_NAME] == room_name for room in self._rooms):
+                errors[CONF_ROOM_NAME] = "duplicate_room_name"
+            else:
+                self._rooms.append(user_input)
+                return await self.async_step_add_another()
 
-            if not self.hass.states.get(climate_entity):
-                errors[CONF_CLIMATE_ENTITY] = "entity_not_found"
-            if not self.hass.states.get(room_sensor):
-                errors[CONF_ROOM_TEMP_SENSOR] = "entity_not_found"
-            if not self.hass.states.get(outdoor_sensor):
-                errors[CONF_OUTDOOR_TEMP_SENSOR] = "entity_not_found"
-
-            if not errors:
-                # Set defaults for advanced options
-                user_input.setdefault(CONF_DEADBAND, DEFAULT_DEADBAND)
-                user_input.setdefault(CONF_MIN_ROOM_TEMP, DEFAULT_MIN_ROOM_TEMP)
-                user_input.setdefault(CONF_MAX_ROOM_TEMP, DEFAULT_MAX_ROOM_TEMP)
-                user_input.setdefault(CONF_MIN_AC_SETPOINT, DEFAULT_MIN_AC_SETPOINT)
-                user_input.setdefault(CONF_MAX_AC_SETPOINT, DEFAULT_MAX_AC_SETPOINT)
-                user_input.setdefault(CONF_OUTDOOR_HEAT_THRESHOLD, DEFAULT_OUTDOOR_HEAT_THRESHOLD)
-                user_input.setdefault(CONF_OUTDOOR_COOL_THRESHOLD, DEFAULT_OUTDOOR_COOL_THRESHOLD)
-                user_input.setdefault(CONF_MODE_SWITCH_HYSTERESIS, DEFAULT_MODE_SWITCH_HYSTERESIS)
-                user_input.setdefault(CONF_MIN_COMMAND_INTERVAL, DEFAULT_MIN_COMMAND_INTERVAL)
-                user_input.setdefault(CONF_MIN_MODE_SWITCH_INTERVAL, DEFAULT_MIN_MODE_SWITCH_INTERVAL)
-                user_input.setdefault(CONF_CONTROL_INTERVAL, DEFAULT_CONTROL_INTERVAL)
-                user_input.setdefault(CONF_ENABLE_DEBUG_SENSORS, DEFAULT_ENABLE_DEBUG_SENSORS)
-                user_input.setdefault(CONF_MIN_RUN_TIME, DEFAULT_MIN_RUN_TIME)
-                user_input.setdefault(CONF_MIN_IDLE_TIME, DEFAULT_MIN_IDLE_TIME)
-                user_input.setdefault(CONF_SETPOINT_ADJUSTMENT_INTERVAL, DEFAULT_SETPOINT_ADJUSTMENT_INTERVAL)
-                user_input.setdefault(CONF_SETPOINT_STEP, DEFAULT_SETPOINT_STEP)
-
-                return self.async_create_entry(
-                    title=user_input[CONF_ZONE_NAME],
-                    data=user_input,
-                )
-
-        data_schema = vol.Schema({
-            vol.Required(CONF_ZONE_NAME, default=DEFAULT_ZONE_NAME): TextSelector(),
-            vol.Required(CONF_CLIMATE_ENTITY): EntitySelector(
-                EntitySelectorConfig(domain="climate")
-            ),
-            vol.Required(CONF_ROOM_TEMP_SENSOR): EntitySelector(
-                EntitySelectorConfig(domain="sensor", device_class="temperature")
-            ),
-            vol.Required(CONF_OUTDOOR_TEMP_SENSOR): EntitySelector(
-                EntitySelectorConfig(domain="sensor", device_class="temperature")
-            ),
-            vol.Required(CONF_TARGET_TEMP, default=DEFAULT_TARGET_TEMP): NumberSelector(
-                NumberSelectorConfig(min=10, max=35, step=0.5, mode=NumberSelectorMode.BOX, unit_of_measurement="°C")
-            ),
-            vol.Optional(CONF_MULTI_SPLIT_GROUP): TextSelector(),
-        })
+        schema = vol.Schema(
+            {
+                vol.Required(CONF_ROOM_NAME): selector.TextSelector(),
+                vol.Required(CONF_CLIMATE_ENTITY): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain="climate")
+                ),
+                vol.Required(CONF_INDOOR_TEMP_SENSOR): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain="sensor", device_class="temperature")
+                ),
+                vol.Required(CONF_OUTDOOR_TEMP_SENSOR): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain="sensor", device_class="temperature")
+                ),
+                vol.Optional(CONF_MULTI_SPLIT_GROUP, default=""): selector.TextSelector(),
+            }
+        )
 
         return self.async_show_form(
-            step_id="user",
-            data_schema=data_schema,
+            step_id="add_room",
+            data_schema=schema,
             errors=errors,
+        )
+
+    async def async_step_add_another(self, user_input=None):
+        """Ask if user wants to add another room."""
+        if user_input is not None:
+            if user_input.get("add_another"):
+                return await self.async_step_add_room()
+            return await self.async_step_global_settings()
+
+        schema = vol.Schema(
+            {
+                vol.Required("add_another", default=True): selector.BooleanSelector(),
+            }
+        )
+
+        return self.async_show_form(
+            step_id="add_another",
+            data_schema=schema,
+            description_placeholders={
+                "rooms_count": str(len(self._rooms)),
+            },
+        )
+
+    async def async_step_global_settings(self, user_input=None):
+        """Handle global settings."""
+        if user_input is not None:
+            return self.async_create_entry(
+                title="Smart Climate Controller",
+                data={CONF_ROOMS: self._rooms},
+                options=user_input,
+            )
+
+        schema = vol.Schema(
+            {
+                vol.Required(
+                    CONF_OUTDOOR_TEMP_HEAT_ONLY,
+                    default=DEFAULT_OUTDOOR_TEMP_HEAT_ONLY,
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=-20, max=30, step=0.5, unit_of_measurement="°C"
+                    )
+                ),
+                vol.Required(
+                    CONF_OUTDOOR_TEMP_COOL_ONLY,
+                    default=DEFAULT_OUTDOOR_TEMP_COOL_ONLY,
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=0, max=40, step=0.5, unit_of_measurement="°C"
+                    )
+                ),
+                vol.Required(
+                    CONF_MINOR_CORRECTION_HYSTERESIS,
+                    default=DEFAULT_MINOR_CORRECTION_HYSTERESIS,
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=0.1, max=2.0, step=0.1, unit_of_measurement="°C"
+                    )
+                ),
+                vol.Required(
+                    CONF_MINOR_CORRECTION_VALUE,
+                    default=DEFAULT_MINOR_CORRECTION_VALUE,
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=1, max=15, step=0.5, unit_of_measurement="°C"
+                    )
+                ),
+                vol.Required(
+                    CONF_MAJOR_CORRECTION_VALUE,
+                    default=DEFAULT_MAJOR_CORRECTION_VALUE,
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=5, max=20, step=0.5, unit_of_measurement="°C"
+                    )
+                ),
+                vol.Required(
+                    CONF_MAJOR_DEVIATION_THRESHOLD,
+                    default=DEFAULT_MAJOR_DEVIATION_THRESHOLD,
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=0.5, max=3.0, step=0.1, unit_of_measurement="°C"
+                    )
+                ),
+                vol.Required(
+                    CONF_MIN_MODE_SWITCH_INTERVAL,
+                    default=DEFAULT_MIN_MODE_SWITCH_INTERVAL,
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=60, max=3600, step=60, unit_of_measurement="s"
+                    )
+                ),
+                vol.Required(
+                    CONF_MIN_POWER_SWITCH_INTERVAL,
+                    default=DEFAULT_MIN_POWER_SWITCH_INTERVAL,
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=60, max=1800, step=60, unit_of_measurement="s"
+                    )
+                ),
+            }
+        )
+
+        return self.async_show_form(
+            step_id="global_settings",
+            data_schema=schema,
         )
 
     @staticmethod
     @callback
     def async_get_options_flow(config_entry):
-        """Get the options flow."""
+        """Get the options flow for this handler."""
         return SmartClimateControllerOptionsFlow(config_entry)
 
 
 class SmartClimateControllerOptionsFlow(config_entries.OptionsFlow):
-    """Handle options flow."""
+    """Handle options flow for Smart Climate Controller."""
 
     def __init__(self, config_entry):
         """Initialize options flow."""
         self.config_entry = config_entry
 
-    async def async_step_init(self, user_input: Optional[dict[str, Any]] = None):
+    async def async_step_init(self, user_input=None):
         """Manage the options."""
+        return await self.async_step_menu()
+
+    async def async_step_menu(self, user_input=None):
+        """Show menu."""
+        return self.async_show_menu(
+            step_id="menu",
+            menu_options=["global_settings", "manage_rooms"],
+        )
+
+    async def async_step_global_settings(self, user_input=None):
+        """Handle global settings."""
         if user_input is not None:
-            # Update config entry
-            self.hass.config_entries.async_update_entry(
-                self.config_entry,
-                data={**self.config_entry.data, **user_input},
-            )
-            return self.async_create_entry(title="", data={})
+            return self.async_create_entry(title="", data=user_input)
 
-        # Get current values
-        data = self.config_entry.data
+        options = self.config_entry.options
 
-        # Log current data for debugging
-        _LOGGER.debug("Options flow - current data keys: %s", list(data.keys()))
-
-        try:
-            options_schema = vol.Schema({
-            vol.Optional(
-                CONF_MULTI_SPLIT_GROUP,
-                default=data.get(CONF_MULTI_SPLIT_GROUP, "")
-            ): TextSelector(),
-            vol.Required(
-                CONF_TARGET_TEMP,
-                default=data.get(CONF_TARGET_TEMP, DEFAULT_TARGET_TEMP)
-            ): NumberSelector(
-                NumberSelectorConfig(min=10, max=35, step=0.5, mode=NumberSelectorMode.BOX, unit_of_measurement="°C")
-            ),
-            vol.Required(
-                CONF_DEADBAND,
-                default=data.get(CONF_DEADBAND, DEFAULT_DEADBAND)
-            ): NumberSelector(
-                NumberSelectorConfig(min=0.1, max=5.0, step=0.1, mode=NumberSelectorMode.BOX, unit_of_measurement="°C")
-            ),
-            vol.Required(
-                CONF_MIN_ROOM_TEMP,
-                default=data.get(CONF_MIN_ROOM_TEMP, DEFAULT_MIN_ROOM_TEMP)
-            ): NumberSelector(
-                NumberSelectorConfig(min=5, max=25, step=0.5, mode=NumberSelectorMode.BOX, unit_of_measurement="°C")
-            ),
-            vol.Required(
-                CONF_MAX_ROOM_TEMP,
-                default=data.get(CONF_MAX_ROOM_TEMP, DEFAULT_MAX_ROOM_TEMP)
-            ): NumberSelector(
-                NumberSelectorConfig(min=20, max=40, step=0.5, mode=NumberSelectorMode.BOX, unit_of_measurement="°C")
-            ),
-            vol.Required(
-                CONF_OUTDOOR_HEAT_THRESHOLD,
-                default=data.get(CONF_OUTDOOR_HEAT_THRESHOLD, DEFAULT_OUTDOOR_HEAT_THRESHOLD)
-            ): NumberSelector(
-                NumberSelectorConfig(min=-10, max=25, step=1, mode=NumberSelectorMode.BOX, unit_of_measurement="°C")
-            ),
-            vol.Required(
-                CONF_OUTDOOR_COOL_THRESHOLD,
-                default=data.get(CONF_OUTDOOR_COOL_THRESHOLD, DEFAULT_OUTDOOR_COOL_THRESHOLD)
-            ): NumberSelector(
-                NumberSelectorConfig(min=0, max=35, step=1, mode=NumberSelectorMode.BOX, unit_of_measurement="°C")
-            ),
-            vol.Required(
-                CONF_MODE_SWITCH_HYSTERESIS,
-                default=data.get(CONF_MODE_SWITCH_HYSTERESIS, DEFAULT_MODE_SWITCH_HYSTERESIS)
-            ): NumberSelector(
-                NumberSelectorConfig(min=0.5, max=5, step=0.5, mode=NumberSelectorMode.BOX, unit_of_measurement="°C")
-            ),
-            vol.Required(
-                CONF_MIN_MODE_SWITCH_INTERVAL,
-                default=data.get(CONF_MIN_MODE_SWITCH_INTERVAL, DEFAULT_MIN_MODE_SWITCH_INTERVAL)
-            ): NumberSelector(
-                NumberSelectorConfig(min=300, max=7200, step=300, mode=NumberSelectorMode.BOX, unit_of_measurement="s")
-            ),
-            vol.Required(
-                CONF_CONTROL_INTERVAL,
-                default=data.get(CONF_CONTROL_INTERVAL, DEFAULT_CONTROL_INTERVAL)
-            ): NumberSelector(
-                NumberSelectorConfig(min=30, max=300, step=10, mode=NumberSelectorMode.BOX, unit_of_measurement="s")
-            ),
-            vol.Required(
-                CONF_MIN_RUN_TIME,
-                default=data.get(CONF_MIN_RUN_TIME, DEFAULT_MIN_RUN_TIME)
-            ): NumberSelector(
-                NumberSelectorConfig(min=60, max=1800, step=30, mode=NumberSelectorMode.BOX, unit_of_measurement="s")
-            ),
-            vol.Required(
-                CONF_MIN_IDLE_TIME,
-                default=data.get(CONF_MIN_IDLE_TIME, DEFAULT_MIN_IDLE_TIME)
-            ): NumberSelector(
-                NumberSelectorConfig(min=60, max=1800, step=30, mode=NumberSelectorMode.BOX, unit_of_measurement="s")
-            ),
-            vol.Required(
-                CONF_SETPOINT_ADJUSTMENT_INTERVAL,
-                default=data.get(CONF_SETPOINT_ADJUSTMENT_INTERVAL, DEFAULT_SETPOINT_ADJUSTMENT_INTERVAL)
-            ): NumberSelector(
-                NumberSelectorConfig(min=60, max=600, step=30, mode=NumberSelectorMode.BOX, unit_of_measurement="s")
-            ),
-            vol.Required(
-                CONF_SETPOINT_STEP,
-                default=data.get(CONF_SETPOINT_STEP, DEFAULT_SETPOINT_STEP)
-            ): NumberSelector(
-                NumberSelectorConfig(min=0.5, max=3.0, step=0.5, mode=NumberSelectorMode.BOX, unit_of_measurement="°C")
-            ),
-            })
-
-            return self.async_show_form(
-                step_id="init",
-                data_schema=options_schema,
-            )
-        except Exception as e:
-            _LOGGER.error("Error creating options schema: %s", e, exc_info=True)
-            # Return a minimal form if there's an error
-            return self.async_show_form(
-                step_id="init",
-                data_schema=vol.Schema({
-                    vol.Required(
-                        CONF_TARGET_TEMP,
-                        default=data.get(CONF_TARGET_TEMP, DEFAULT_TARGET_TEMP)
-                    ): NumberSelector(
-                        NumberSelectorConfig(min=10, max=35, step=0.5, mode=NumberSelectorMode.BOX, unit_of_measurement="°C")
+        schema = vol.Schema(
+            {
+                vol.Required(
+                    CONF_OUTDOOR_TEMP_HEAT_ONLY,
+                    default=options.get(
+                        CONF_OUTDOOR_TEMP_HEAT_ONLY, DEFAULT_OUTDOOR_TEMP_HEAT_ONLY
                     ),
-                }),
-            )
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=-20, max=30, step=0.5, unit_of_measurement="°C"
+                    )
+                ),
+                vol.Required(
+                    CONF_OUTDOOR_TEMP_COOL_ONLY,
+                    default=options.get(
+                        CONF_OUTDOOR_TEMP_COOL_ONLY, DEFAULT_OUTDOOR_TEMP_COOL_ONLY
+                    ),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=0, max=40, step=0.5, unit_of_measurement="°C"
+                    )
+                ),
+                vol.Required(
+                    CONF_MINOR_CORRECTION_HYSTERESIS,
+                    default=options.get(
+                        CONF_MINOR_CORRECTION_HYSTERESIS,
+                        DEFAULT_MINOR_CORRECTION_HYSTERESIS,
+                    ),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=0.1, max=2.0, step=0.1, unit_of_measurement="°C"
+                    )
+                ),
+                vol.Required(
+                    CONF_MINOR_CORRECTION_VALUE,
+                    default=options.get(
+                        CONF_MINOR_CORRECTION_VALUE, DEFAULT_MINOR_CORRECTION_VALUE
+                    ),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=1, max=15, step=0.5, unit_of_measurement="°C"
+                    )
+                ),
+                vol.Required(
+                    CONF_MAJOR_CORRECTION_VALUE,
+                    default=options.get(
+                        CONF_MAJOR_CORRECTION_VALUE, DEFAULT_MAJOR_CORRECTION_VALUE
+                    ),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=5, max=20, step=0.5, unit_of_measurement="°C"
+                    )
+                ),
+                vol.Required(
+                    CONF_MAJOR_DEVIATION_THRESHOLD,
+                    default=options.get(
+                        CONF_MAJOR_DEVIATION_THRESHOLD, DEFAULT_MAJOR_DEVIATION_THRESHOLD
+                    ),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=0.5, max=3.0, step=0.1, unit_of_measurement="°C"
+                    )
+                ),
+                vol.Required(
+                    CONF_MIN_MODE_SWITCH_INTERVAL,
+                    default=options.get(
+                        CONF_MIN_MODE_SWITCH_INTERVAL, DEFAULT_MIN_MODE_SWITCH_INTERVAL
+                    ),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=60, max=3600, step=60, unit_of_measurement="s"
+                    )
+                ),
+                vol.Required(
+                    CONF_MIN_POWER_SWITCH_INTERVAL,
+                    default=options.get(
+                        CONF_MIN_POWER_SWITCH_INTERVAL, DEFAULT_MIN_POWER_SWITCH_INTERVAL
+                    ),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=60, max=1800, step=60, unit_of_measurement="s"
+                    )
+                ),
+            }
+        )
+
+        return self.async_show_form(
+            step_id="global_settings",
+            data_schema=schema,
+        )
+
+    async def async_step_manage_rooms(self, user_input=None):
+        """Manage rooms - not implemented yet, requires reload."""
+        return self.async_abort(reason="rooms_require_reconfiguration")

@@ -1,52 +1,72 @@
 {
   "config": {
     "step": {
-      "user": {
-        "title": "Smart Climate Controller Setup",
-        "description": "Configure your smart climate control zone",
+      "add_room": {
+        "title": "Add Room",
+        "description": "Configure a room for climate control",
         "data": {
-          "zone_name": "Zone Name",
-          "climate_entity": "Climate Device (AC)",
-          "room_temp_sensor": "Room Temperature Sensor",
+          "room_name": "Room Name",
+          "climate_entity": "Air Conditioner",
+          "indoor_temp_sensor": "Indoor Temperature Sensor",
           "outdoor_temp_sensor": "Outdoor Temperature Sensor",
-          "target_temp": "Target Temperature",
-          "multi_split_group": "Multi-Split Group ID (optional)"
-        },
-        "data_description": {
-          "multi_split_group": "Enter the same group ID for all zones that share one outdoor unit. Leave empty for independent operation."
+          "multi_split_group": "Multi-Split Group (optional)"
+        }
+      },
+      "add_another": {
+        "title": "Add Another Room?",
+        "description": "You have added {rooms_count} room(s). Add another?",
+        "data": {
+          "add_another": "Add another room"
+        }
+      },
+      "global_settings": {
+        "title": "Global Settings",
+        "description": "Configure global parameters for climate control",
+        "data": {
+          "outdoor_temp_heat_only": "Outdoor temp for heat-only mode",
+          "outdoor_temp_cool_only": "Outdoor temp for cool-only mode",
+          "minor_correction_hysteresis": "Minor correction hysteresis",
+          "minor_correction_value": "Minor correction value",
+          "major_correction_value": "Major correction value",
+          "major_deviation_threshold": "Major deviation threshold",
+          "min_mode_switch_interval": "Min mode switch interval (seconds)",
+          "min_power_switch_interval": "Min power switch interval (seconds)"
         }
       }
     },
     "error": {
-      "entity_not_found": "Entity not found"
+      "duplicate_room_name": "Room name already exists"
+    },
+    "abort": {
+      "already_configured": "Integration is already configured"
     }
   },
   "options": {
     "step": {
-      "init": {
-        "title": "Advanced Settings",
-        "description": "Configure advanced control parameters",
+      "menu": {
+        "title": "Smart Climate Controller Options",
+        "menu_options": {
+          "global_settings": "Global Settings",
+          "manage_rooms": "Manage Rooms"
+        }
+      },
+      "global_settings": {
+        "title": "Global Settings",
+        "description": "Configure global parameters for climate control",
         "data": {
-          "multi_split_group": "Multi-Split Group ID",
-          "target_temp": "Target Temperature",
-          "deadband": "Deadband (Stabilization Zone)",
-          "min_room_temp": "Minimum Room Temperature",
-          "max_room_temp": "Maximum Room Temperature",
-          "base_offset": "Base AC Offset",
-          "outdoor_heat_threshold": "Outdoor Heating Threshold",
-          "outdoor_cool_threshold": "Outdoor Cooling Threshold",
-          "mode_switch_hysteresis": "Mode Switch Hysteresis",
-          "min_mode_switch_interval": "Minimum Mode Switch Interval",
-          "control_interval": "Control Cycle Interval"
-        },
-        "data_description": {
-          "multi_split_group": "Group ID for multi-split systems. All zones with the same ID will operate in the same mode. Leave empty to remove from group.",
-          "base_offset": "Temperature offset for AC setpoint. 0 = AC temp matches target, 2 = AC is 2°C colder (cooling) or warmer (heating) than target.",
-          "deadband": "Temperature range around target where no action is taken.",
-          "outdoor_heat_threshold": "Outdoor temperature below which heating is preferred.",
-          "outdoor_cool_threshold": "Outdoor temperature above which cooling is preferred."
+          "outdoor_temp_heat_only": "Outdoor temp for heat-only mode",
+          "outdoor_temp_cool_only": "Outdoor temp for cool-only mode",
+          "minor_correction_hysteresis": "Minor correction hysteresis",
+          "minor_correction_value": "Minor correction value",
+          "major_correction_value": "Major correction value",
+          "major_deviation_threshold": "Major deviation threshold",
+          "min_mode_switch_interval": "Min mode switch interval (seconds)",
+          "min_power_switch_interval": "Min power switch interval (seconds)"
         }
       }
+    },
+    "abort": {
+      "rooms_require_reconfiguration": "To change rooms, please remove and re-add the integration"
     }
   }
 }
