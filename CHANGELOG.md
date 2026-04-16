@@ -60,15 +60,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Conflict Resolution**: Intelligent tie-breaking based on urgency and outdoor conditions
 - **Mode Preservation**: Maintains current mode when all zones are satisfied
 
+#### Documentation
+- New **[MULTI_SPLIT_GUIDE.md](MULTI_SPLIT_GUIDE.md)**: Comprehensive 400+ line guide covering all aspects of multi-split configuration
+- New **[MULTI_SPLIT_EXAMPLES.md](MULTI_SPLIT_EXAMPLES.md)**: Ready-to-use configuration examples for various scenarios
+- Updated README.md with multi-split quick start and links to detailed guides
+
 ### Changed
 - Updated `ClimateController.execute_control_cycle()` to accept `multi_split_group_shared_mode` parameter
 - Enhanced coordinator initialization to register multi-split groups
 - Updated version to 0.2.0 in manifest.json
 
+### Fixed
+- **Critical**: Fixed architecture violation - removed Home Assistant dependencies from domain layer
+  - `domain/models.py`: Changed to use domain `HVACMode` enum instead of HA's
+  - `domain/services/multi_split_coordinator.py`: Removed HA dependency, now uses domain types only
+- Fixed empty string handling for `multi_split_group` configuration parameter
+- Config flow now properly displays and saves `multi_split_group` field
+
 ### Technical Details
 - Backward compatible with 0.1.x single-zone configurations
 - No configuration migration required
 - Multi-split features are optional - activate by setting `multi_split_group` parameter
+- Domain layer remains fully Home Assistant-independent (clean architecture preserved)
 
 ## [0.1.1] - 2026-04-16
 

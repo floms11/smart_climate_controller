@@ -38,6 +38,7 @@ from .const import (
     CONF_MIN_MODE_SWITCH_INTERVAL,
     CONF_CONTROL_INTERVAL,
     CONF_ENABLE_DEBUG_SENSORS,
+    CONF_MULTI_SPLIT_GROUP,
     DEFAULT_ZONE_NAME,
     DEFAULT_TARGET_TEMP,
     DEFAULT_DEADBAND,
@@ -119,6 +120,7 @@ class SmartClimateControllerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN)
             vol.Required(CONF_TARGET_TEMP, default=DEFAULT_TARGET_TEMP): NumberSelector(
                 NumberSelectorConfig(min=10, max=35, step=0.5, mode=NumberSelectorMode.BOX, unit_of_measurement="°C")
             ),
+            vol.Optional(CONF_MULTI_SPLIT_GROUP): TextSelector(),
         })
 
         return self.async_show_form(
@@ -155,6 +157,10 @@ class SmartClimateControllerOptionsFlow(config_entries.OptionsFlow):
         data = self.config_entry.data
 
         options_schema = vol.Schema({
+            vol.Optional(
+                CONF_MULTI_SPLIT_GROUP,
+                default=data.get(CONF_MULTI_SPLIT_GROUP, "")
+            ): TextSelector(),
             vol.Required(
                 CONF_TARGET_TEMP,
                 default=data.get(CONF_TARGET_TEMP, DEFAULT_TARGET_TEMP)

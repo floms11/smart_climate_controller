@@ -273,28 +273,61 @@ logger:
 
 ### Налаштування мультиспліт групи
 
-При створенні інтеграції для кожної зони додайте однаковий ідентифікатор групи у поле `multi_split_group`:
+#### Швидке налаштування
+
+При додаванні інтеграції через UI введіть **однаковий ідентифікатор групи** в поле **"Multi-Split Group"** для всіх зон, що належать до однієї мультиспліт системи.
+
+**Приклад:** Якщо у вас три внутрішні блоки (Спальня, Вітальня, Кухня) підключені до одного зовнішнього блоку:
+1. Додайте інтеграцію для Спальні, вкажіть `multi_split_group: "main_house"`
+2. Додайте інтеграцію для Вітальні, вкажіть `multi_split_group: "main_house"`
+3. Додайте інтеграцію для Кухні, вкажіть `multi_split_group: "main_house"`
+
+Всі три зони автоматично об'єднаються в одну групу з спільним режимом роботи.
+
+#### YAML конфігурація
 
 ```yaml
-# Конфігурація configuration.yaml (приклад)
 smart_climate_controller:
   - zone_name: "Спальня"
     climate_entity: climate.bedroom_ac
-    multi_split_group: "main_house"
-    # ... інші параметри
+    room_temp_sensor: sensor.bedroom_temperature
+    outdoor_temp_sensor: sensor.outdoor_temperature
+    target_temp: 21.0
+    multi_split_group: "main_house"  # ← Однаковий ID для всієї групи
 
   - zone_name: "Вітальня"
     climate_entity: climate.living_room_ac
-    multi_split_group: "main_house"
-    # ... інші параметри
+    room_temp_sensor: sensor.living_room_temperature
+    outdoor_temp_sensor: sensor.outdoor_temperature
+    target_temp: 22.0
+    multi_split_group: "main_house"  # ← Однаковий ID
 
   - zone_name: "Кухня"
     climate_entity: climate.kitchen_ac
-    multi_split_group: "main_house"
-    # ... інші параметри
+    room_temp_sensor: sensor.kitchen_temperature
+    outdoor_temp_sensor: sensor.outdoor_temperature
+    target_temp: 20.0
+    multi_split_group: "main_house"  # ← Однаковий ID
 ```
 
-Всі зони з однаковим `multi_split_group` автоматично об'єднаються в одну групу з спільним режимом роботи.
+#### Декілька мультиспліт груп
+
+Ви можете мати кілька незалежних мультиспліт систем, кожна з унікальним ID:
+
+```yaml
+  # Перша система - основний будинок
+  - multi_split_group: "main_house"
+
+  # Друга система - гостьовий будинок
+  - multi_split_group: "guest_house"
+
+  # Окремі блоки без групи працюють незалежно
+  # (не вказуйте multi_split_group)
+```
+
+📖 **Детальна документація:**
+- **[Повне керівництво по налаштуванню мультиспліт систем](MULTI_SPLIT_GUIDE.md)** - детальна інформація про всі можливості
+- **[Приклади налаштування для різних сценаріїв](MULTI_SPLIT_EXAMPLES.md)** - готові конфігурації
 
 ### Діагностика мультиспліт груп
 

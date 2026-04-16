@@ -4,13 +4,12 @@ from typing import Optional
 from datetime import datetime
 from enum import Enum
 
-from homeassistant.components.climate import HVACMode
-
 from .value_objects import (
     Temperature,
     SensorSnapshot,
     DeviceCapabilities,
     DeviceState,
+    HVACMode,
 )
 
 

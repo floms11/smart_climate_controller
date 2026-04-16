@@ -31,7 +31,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     # Register multi-split group if configured
     multi_split_group_id = entry.data.get("multi_split_group")
-    if multi_split_group_id:
+    if multi_split_group_id and multi_split_group_id.strip():
         multi_split_coordinator = get_multi_split_coordinator(hass)
 
         # Check if group already exists, if not create it

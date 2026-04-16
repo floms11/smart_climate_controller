@@ -4,10 +4,10 @@ from datetime import datetime, timedelta
 from typing import Optional
 
 from homeassistant.core import HomeAssistant
-from homeassistant.components.climate import HVACMode
 
 from .const import DOMAIN
 from .domain.models import MultiSplitGroup
+from .domain.value_objects import HVACMode
 from .domain.services.multi_split_coordinator import MultiSplitModeSelector
 
 _LOGGER = logging.getLogger(__name__)
