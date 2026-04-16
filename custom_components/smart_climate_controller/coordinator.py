@@ -368,35 +368,72 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
         ac_target_temp = None
         should_turn_off = False
 
+        _LOGGER.info(
+            "Room %s: temperature control - indoor=%.1f, target=%.1f, diff=%.1f, mode=%s, major_threshold=%.1f",
+            room_name, indoor_temp, target_temp, temp_diff, physical_mode, major_threshold
+        )
+
         if physical_mode == HVACMode.HEAT:
             # Heating mode logic
             if temp_diff > major_threshold:
                 # Room is too hot - turn off AC
                 should_turn_off = True
+                _LOGGER.info(
+                    "Room %s: 🔴 HEAT mode - room too hot (diff %.1f > threshold %.1f) - TURNING OFF",
+                    room_name, temp_diff, major_threshold
+                )
             elif temp_diff < -major_threshold:
                 # Room is too cold - major correction
                 ac_target_temp = min(target_temp + major_correction, AC_MAX_TEMP)
+                _LOGGER.info(
+                    "Room %s: HEAT mode - major correction: %.1f + %.1f = %.1f",
+                    room_name, target_temp, major_correction, ac_target_temp
+                )
             elif temp_diff < -minor_hysteresis:
                 # Room is slightly cold - minor correction
                 ac_target_temp = min(target_temp + minor_correction, AC_MAX_TEMP)
+                _LOGGER.info(
+                    "Room %s: HEAT mode - minor correction: %.1f + %.1f = %.1f",
+                    room_name, target_temp, minor_correction, ac_target_temp
+                )
             else:
                 # Within acceptable range - set target temp
                 ac_target_temp = target_temp
+                _LOGGER.info(
+                    "Room %s: HEAT mode - within range, set target %.1f",
+                    room_name, ac_target_temp
+                )
 
         elif physical_mode == HVACMode.COOL:
             # Cooling mode logic
             if temp_diff < -major_threshold:
                 # Room is too cold - turn off AC
                 should_turn_off = True
+                _LOGGER.info(
+                    "Room %s: 🔴 COOL mode - room too cold (diff %.1f < -threshold %.1f) - TURNING OFF",
+                    room_name, temp_diff, major_threshold
+                )
             elif temp_diff > major_threshold:
                 # Room is too hot - major correction
                 ac_target_temp = max(target_temp - major_correction, AC_MIN_TEMP)
+                _LOGGER.info(
+                    "Room %s: COOL mode - major correction: %.1f - %.1f = %.1f",
+                    room_name, target_temp, major_correction, ac_target_temp
+                )
             elif temp_diff > minor_hysteresis:
                 # Room is slightly hot - minor correction
                 ac_target_temp = max(target_temp - minor_correction, AC_MIN_TEMP)
+                _LOGGER.info(
+                    "Room %s: COOL mode - minor correction: %.1f - %.1f = %.1f",
+                    room_name, target_temp, minor_correction, ac_target_temp
+                )
             else:
                 # Within acceptable range - set target temp
                 ac_target_temp = target_temp
+                _LOGGER.info(
+                    "Room %s: COOL mode - within range, set target %.1f",
+                    room_name, ac_target_temp
+                )
 
         # Ensure temperature is within AC limits
         if ac_target_temp is not None:
@@ -410,8 +447,13 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
 
         # Apply control
         if should_turn_off:
+            _LOGGER.info("Room %s: >>> Calling _control_room_climate with mode=OFF", room_name)
             await self._control_room_climate(room_name, HVACMode.OFF, None)
         else:
+            _LOGGER.info(
+                "Room %s: >>> Calling _control_room_climate with mode=%s, temp=%.1f",
+                room_name, physical_mode, ac_target_temp
+            )
             await self._control_room_climate(room_name, physical_mode, ac_target_temp)
 
     async def _control_room_climate(
@@ -471,24 +513,32 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
         now = dt_util.utcnow()
 
         if mode_changed:
-            # Check mode switch interval
-            min_mode_interval = self._get_global_option(
-                CONF_MIN_MODE_SWITCH_INTERVAL, DEFAULT_MIN_MODE_SWITCH_INTERVAL
-            )
+            # Check mode switch interval only for heat/cool/auto switching
+            # Power on/off is controlled by min_power_switch_interval below
+            if hvac_mode != HVACMode.OFF and current_mode != HVACMode.OFF:
+                # Both old and new modes are active (heat/cool/auto) - check interval
+                min_mode_interval = self._get_global_option(
+                    CONF_MIN_MODE_SWITCH_INTERVAL, DEFAULT_MIN_MODE_SWITCH_INTERVAL
+                )
 
-            if room_state.last_mode_switch:
-                time_since_switch = (now - room_state.last_mode_switch).total_seconds()
-                if time_since_switch < min_mode_interval:
-                    _LOGGER.warning(
-                        "Room %s: ⏱ BLOCKED mode change (%.0f sec since last, min %d sec required)",
-                        room_name, time_since_switch, min_mode_interval
-                    )
-                    return
-                else:
-                    _LOGGER.info(
-                        "Room %s: mode switch interval OK (%.0f sec since last, min %d sec)",
-                        room_name, time_since_switch, min_mode_interval
-                    )
+                if room_state.last_mode_switch:
+                    time_since_switch = (now - room_state.last_mode_switch).total_seconds()
+                    if time_since_switch < min_mode_interval:
+                        _LOGGER.warning(
+                            "Room %s: ⏱ BLOCKED mode change (%.0f sec since last, min %d sec required)",
+                            room_name, time_since_switch, min_mode_interval
+                        )
+                        return
+                    else:
+                        _LOGGER.info(
+                            "Room %s: mode switch interval OK (%.0f sec since last, min %d sec)",
+                            room_name, time_since_switch, min_mode_interval
+                        )
+            else:
+                _LOGGER.debug(
+                    "Room %s: mode change involves OFF - will check power switch interval instead",
+                    room_name
+                )
 
         if (current_mode == HVACMode.OFF and hvac_mode != HVACMode.OFF) or (
             current_mode != HVACMode.OFF and hvac_mode == HVACMode.OFF
