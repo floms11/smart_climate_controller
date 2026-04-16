@@ -131,6 +131,21 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
 
             self._last_known_device_mode = device_mode
 
+            # Ensure all timestamps are timezone-aware before passing to controller
+            # This is defensive programming in case of data corruption or migration issues
+            def ensure_aware(dt):
+                """Ensure datetime is timezone-aware."""
+                if dt is None:
+                    return None
+                if dt.tzinfo is None:
+                    _LOGGER.warning("Found timezone-naive datetime, converting to UTC: %s", dt)
+                    return dt_util.as_utc(dt)
+                return dt
+
+            safe_last_run_start = ensure_aware(self.last_run_start)
+            safe_last_idle_start = ensure_aware(self.last_idle_start)
+            safe_last_setpoint_adjustment = ensure_aware(self.last_setpoint_adjustment)
+
             # Get multi-split shared mode if applicable
             multi_split_shared_mode = None
             if self.multi_split_group_id:
@@ -173,11 +188,11 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
                 # New parameters
                 short_term_rate=short_term_rate,
                 long_term_rate=long_term_rate,
-                last_run_start=self.last_run_start,
-                last_idle_start=self.last_idle_start,
+                last_run_start=safe_last_run_start,
+                last_idle_start=safe_last_idle_start,
                 min_run_time=self.config.get("min_run_time", 300),
                 min_idle_time=self.config.get("min_idle_time", 180),
-                last_setpoint_adjustment=self.last_setpoint_adjustment,
+                last_setpoint_adjustment=safe_last_setpoint_adjustment,
                 setpoint_adjustment_interval=self.config.get("setpoint_adjustment_interval", 120),
                 setpoint_step=self.config.get("setpoint_step", 1.0),
                 # Multi-split support
