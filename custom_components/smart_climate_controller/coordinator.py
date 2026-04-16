@@ -318,10 +318,15 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
             # Trigger immediate update to refresh sensors
             self.hass.async_create_task(self.async_request_refresh())
 
-        # Register listener
+        # Create event filter function
+        def event_filter(event):
+            """Filter events to only climate entity changes."""
+            return event.data.get("entity_id") == climate_entity
+
+        # Register listener with event filter
         self.hass.bus.async_listen(
             "state_changed",
             state_change_listener,
-            lambda event: event.data.get("entity_id") == climate_entity,
+            event_filter=event_filter,
         )
         _LOGGER.info("State listener registered for %s", climate_entity)
