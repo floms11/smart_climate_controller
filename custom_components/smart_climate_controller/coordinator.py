@@ -291,7 +291,7 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
                 )
                 return current_physical_mode
 
-        # Analyze room needs
+        # Analyze room needs - only count significant deviations
         heat_need_score = 0
         cool_need_score = 0
 
@@ -312,16 +312,12 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
 
             temp_diff = indoor_temp - room_state.target_temperature
 
-            # Major deviation gets higher priority
+            # Only count deviations greater than threshold to minimize mode switching
             if temp_diff < -major_deviation_threshold:
-                heat_need_score += 10  # Need heating badly
-            elif temp_diff < 0:
-                heat_need_score += 5  # Need heating
+                heat_need_score += 10  # Need heating
 
             if temp_diff > major_deviation_threshold:
-                cool_need_score += 10  # Need cooling badly
-            elif temp_diff > 0:
-                cool_need_score += 5  # Need cooling
+                cool_need_score += 10  # Need cooling
 
         # Decide based on scores
         if heat_need_score > cool_need_score:
