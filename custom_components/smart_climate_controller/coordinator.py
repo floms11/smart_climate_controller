@@ -1,4 +1,5 @@
 """Data coordinator for Smart Climate Controller."""
+import asyncio
 import logging
 from datetime import timedelta
 from typing import Optional
@@ -68,7 +69,11 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
             outdoor_temp = self.state_reader.get_temperature(outdoor_sensor)
 
             if room_temp is None or outdoor_temp is None:
-                _LOGGER.warning("Sensor data unavailable")
+                _LOGGER.warning(
+                    "Sensor data unavailable: room_temp=%s, outdoor_temp=%s. Using safe data.",
+                    room_temp,
+                    outdoor_temp,
+                )
                 return self._get_safe_data()
 
             # Read device state
@@ -177,13 +182,27 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
 
     def _get_safe_data(self) -> dict:
         """Return safe/empty data when sensors unavailable."""
+        # Try to at least get device state even if sensors are unavailable
+        climate_entity = self.config.get("climate_entity")
+        device_mode = None
+        device_setpoint = None
+
+        if climate_entity:
+            try:
+                climate_state = self.state_reader.get_climate_state(climate_entity)
+                if climate_state:
+                    device_mode = climate_state["hvac_mode"]
+                    device_setpoint = climate_state["target_temperature"]
+            except Exception as e:
+                _LOGGER.debug("Could not read climate state in safe mode: %s", e)
+
         return {
             "decision": None,
             "command_sent": False,
             "room_temp": None,
             "outdoor_temp": None,
-            "device_mode": None,
-            "device_setpoint": None,
+            "device_mode": device_mode,
+            "device_setpoint": device_setpoint,
             "controller_diagnostics": None,
         }
 

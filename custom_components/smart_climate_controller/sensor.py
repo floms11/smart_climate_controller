@@ -145,14 +145,45 @@ class ActualDeviceModeSensor(SmartClimateSensorBase):
     def __init__(self, coordinator: SmartClimateCoordinator, entry: ConfigEntry) -> None:
         """Initialize the actual device mode sensor."""
         super().__init__(coordinator, entry, "actual_device_mode", "Actual Device Mode")
+        self._climate_entity = coordinator.config.get("climate_entity")
+
+    async def async_added_to_hass(self) -> None:
+        """Subscribe to climate entity state changes."""
+        await super().async_added_to_hass()
+
+        # Subscribe to state changes of the climate entity
+        if self._climate_entity:
+            from homeassistant.core import callback
+            from homeassistant.helpers.event import async_track_state_change_event
+
+            @callback
+            def climate_state_listener(event):
+                """Handle climate entity state changes."""
+                self.async_write_ha_state()
+
+            self.async_on_remove(
+                async_track_state_change_event(
+                    self.hass, [self._climate_entity], climate_state_listener
+                )
+            )
+
+    @property
+    def should_poll(self) -> bool:
+        """Disable polling - we use event listener instead."""
+        return False
 
     @property
     def native_value(self) -> Optional[str]:
-        """Return the state of the sensor."""
-        if self.coordinator.data is None:
+        """Return the state of the sensor - read directly from climate entity."""
+        if not self._climate_entity:
             return None
 
-        device_mode = self.coordinator.data.get("device_mode")
+        # Read state directly from the climate entity for real-time updates
+        climate_state = self.hass.states.get(self._climate_entity)
+        if not climate_state:
+            return None
+
+        device_mode = climate_state.state
         if device_mode:
             # Make it more readable
             mode_names = {
@@ -169,11 +200,15 @@ class ActualDeviceModeSensor(SmartClimateSensorBase):
 
     @property
     def icon(self) -> str:
-        """Return the icon."""
-        if self.coordinator.data is None:
+        """Return the icon - read directly from climate entity."""
+        if not self._climate_entity:
             return "mdi:air-conditioner"
 
-        device_mode = self.coordinator.data.get("device_mode")
+        climate_state = self.hass.states.get(self._climate_entity)
+        if not climate_state:
+            return "mdi:air-conditioner"
+
+        device_mode = climate_state.state
         icon_map = {
             "off": "mdi:power-off",
             "heat": "mdi:fire",
@@ -186,14 +221,17 @@ class ActualDeviceModeSensor(SmartClimateSensorBase):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        """Return additional attributes."""
-        if self.coordinator.data is None:
-            return {}
-
-        return {
-            "device_setpoint": self.coordinator.data.get("device_setpoint"),
+        """Return additional attributes - read directly from climate entity."""
+        attrs = {
             "controller_enabled": self.coordinator.controller_enabled,
         }
+
+        if self._climate_entity:
+            climate_state = self.hass.states.get(self._climate_entity)
+            if climate_state:
+                attrs["device_setpoint"] = climate_state.attributes.get("temperature")
+
+        return attrs
 
 
 class DesiredHVACModeSensor(SmartClimateSensorBase):
