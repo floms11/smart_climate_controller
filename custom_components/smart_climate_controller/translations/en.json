@@ -9,7 +9,11 @@
           "climate_entity": "Climate Device (AC)",
           "room_temp_sensor": "Room Temperature Sensor",
           "outdoor_temp_sensor": "Outdoor Temperature Sensor",
-          "target_temp": "Target Temperature"
+          "target_temp": "Target Temperature",
+          "multi_split_group": "Multi-Split Group ID (optional)"
+        },
+        "data_description": {
+          "multi_split_group": "Enter the same group ID for all zones that share one outdoor unit. Leave empty for independent operation."
         }
       }
     },
@@ -23,6 +27,7 @@
         "title": "Advanced Settings",
         "description": "Configure advanced control parameters",
         "data": {
+          "multi_split_group": "Multi-Split Group ID",
           "target_temp": "Target Temperature",
           "deadband": "Deadband (Stabilization Zone)",
           "min_room_temp": "Minimum Room Temperature",
@@ -33,6 +38,9 @@
           "mode_switch_hysteresis": "Mode Switch Hysteresis",
           "min_mode_switch_interval": "Minimum Mode Switch Interval",
           "control_interval": "Control Cycle Interval"
+        },
+        "data_description": {
+          "multi_split_group": "Group ID for multi-split systems. All zones with the same ID will operate in the same mode. Leave empty to remove from group."
         }
       }
     }

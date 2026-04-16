@@ -74,6 +74,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Critical**: Fixed architecture violation - removed Home Assistant dependencies from domain layer
   - `domain/models.py`: Changed to use domain `HVACMode` enum instead of HA's
   - `domain/services/multi_split_coordinator.py`: Removed HA dependency, now uses domain types only
+- **Critical**: Fixed 500 Internal Server Error in config flow
+  - Added missing translations for `multi_split_group` field in `strings.json`
+  - Added translations in `en.json` and new `uk.json` (Ukrainian)
 - Fixed empty string handling for `multi_split_group` configuration parameter
 - Config flow now properly displays and saves `multi_split_group` field
 
