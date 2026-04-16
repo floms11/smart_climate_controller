@@ -554,8 +554,8 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
             if group_name:
                 await self._synchronize_group_modes(group_name, room_name, hvac_mode)
 
-        # Trigger immediate update to apply changes
-        await self.async_refresh()
+        # Trigger immediate update to apply changes and refresh UI
+        await self.async_request_refresh()
 
     async def _synchronize_group_modes(
         self, group_name: str, initiating_room: str, new_mode: HVACMode
@@ -603,8 +603,8 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
                 "Thermostat %s: target temperature changed from %.1f to %.1f (mode: %s)",
                 room_name, old_temp, temperature, room_state.hvac_mode
             )
-            # Trigger immediate update to apply changes
-            await self.async_refresh()
+            # Trigger immediate update to apply changes and refresh UI
+            await self.async_request_refresh()
 
     def get_room_state(self, room_name: str) -> RoomState | None:
         """Get room state."""
