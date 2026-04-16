@@ -32,6 +32,7 @@ async def async_setup_entry(
         DesiredSetpointSensor(coordinator, entry),
         ControlDecisionSensor(coordinator, entry),
         ActualDeviceModeSensor(coordinator, entry),
+        DesiredHVACModeSensor(coordinator, entry),
     ]
 
     async_add_entities(entities)
@@ -193,3 +194,68 @@ class ActualDeviceModeSensor(SmartClimateSensorBase):
             "device_setpoint": self.coordinator.data.get("device_setpoint"),
             "controller_enabled": self.coordinator.controller_enabled,
         }
+
+
+class DesiredHVACModeSensor(SmartClimateSensorBase):
+    """Sensor showing desired HVAC mode (heat or cool) that controller wants to use."""
+
+    def __init__(self, coordinator: SmartClimateCoordinator, entry: ConfigEntry) -> None:
+        """Initialize the desired HVAC mode sensor."""
+        super().__init__(coordinator, entry, "desired_hvac_mode", "Desired HVAC Mode")
+
+    @property
+    def native_value(self) -> Optional[str]:
+        """Return the state of the sensor - only Heat, Cool, or Off."""
+        if self.coordinator.data is None:
+            return None
+
+        decision = self.coordinator.data.get("decision")
+        if decision and decision.desired_mode:
+            mode = decision.desired_mode.value
+            # Only return actual operation modes
+            if mode == "heat":
+                return "Heat"
+            elif mode == "cool":
+                return "Cool"
+            elif mode == "off":
+                return "Off"
+            else:
+                # For other modes (auto, etc), return None or Off
+                return "Off"
+
+        return "Off"
+
+    @property
+    def icon(self) -> str:
+        """Return the icon."""
+        value = self.native_value
+        if value == "Heat":
+            return "mdi:fire"
+        elif value == "Cool":
+            return "mdi:snowflake"
+        elif value == "Off":
+            return "mdi:power-off"
+        else:
+            return "mdi:thermostat"
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return additional attributes."""
+        if self.coordinator.data is None:
+            return {}
+
+        attrs = {}
+
+        # Add manual mode override info
+        if self.coordinator.manual_mode_override:
+            attrs["mode_source"] = "Manual"
+            attrs["manual_override"] = self.coordinator.manual_mode_override
+        else:
+            attrs["mode_source"] = "Auto"
+
+        # Add decision reason
+        decision = self.coordinator.data.get("decision")
+        if decision:
+            attrs["reason"] = decision.reason
+
+        return attrs

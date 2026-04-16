@@ -274,46 +274,46 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
                 self.controller_enabled,
             )
 
-            # Determine what mode the integration expects
-            expected_mode = None
-            if not self.controller_enabled:
-                expected_mode = "off"
-            elif self.manual_mode_override:
-                expected_mode = self.manual_mode_override
-            # For AUTO mode (no manual override), we don't have a fixed expected_mode
+            # Get the desired mode from last decision (what integration wants)
+            desired_mode = None
+            if self.data and self.data.get("decision"):
+                decision = self.data.get("decision")
+                if decision.desired_mode:
+                    desired_mode = decision.desired_mode.value
 
-            # If user changed mode on AC (not through integration), restore expected mode
-            if expected_mode and new_mode != expected_mode:
+            # If user changed mode on AC and it doesn't match desired mode, restore it
+            if desired_mode and new_mode != desired_mode and new_mode in ("heat", "cool", "off"):
                 _LOGGER.warning(
-                    "User manually changed AC mode to %s, but integration expects %s. Restoring integration mode.",
+                    "User manually changed AC mode to %s, but Desired HVAC Mode is %s. Restoring to %s.",
                     new_mode,
-                    expected_mode,
+                    desired_mode,
+                    desired_mode,
                 )
 
                 # Wait a bit to avoid race conditions
                 await asyncio.sleep(0.5)
 
-                # Restore the expected mode
+                # Restore the desired mode
                 from .application.commands import SetClimateCommand
                 from .domain.value_objects import HVACMode, Temperature
 
-                if expected_mode in ("heat", "cool"):
+                if desired_mode in ("heat", "cool"):
                     # Get current target temperature from config
                     target_temp = self.config.get("target_temp", 24.0)
                     command = SetClimateCommand(
                         device_id=climate_entity,
-                        hvac_mode=HVACMode(expected_mode),
+                        hvac_mode=HVACMode(desired_mode),
                         target_temperature=Temperature(target_temp),
                     )
-                    _LOGGER.info("Restoring mode to: %s with temp: %.1f", expected_mode, target_temp)
+                    _LOGGER.info("Restoring AC mode to: %s with temp: %.1f", desired_mode, target_temp)
                     await self.command_sender.send_climate_command(command, climate_entity)
-                elif expected_mode == "off":
+                elif desired_mode == "off":
                     command = SetClimateCommand(
                         device_id=climate_entity,
                         hvac_mode=HVACMode.OFF,
                         target_temperature=None,
                     )
-                    _LOGGER.info("Restoring mode to: OFF")
+                    _LOGGER.info("Restoring AC mode to: OFF")
                     await self.command_sender.send_climate_command(command, climate_entity)
 
             # Update last known device mode
