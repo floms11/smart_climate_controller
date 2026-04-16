@@ -1,4 +1,5 @@
 """Home Assistant command sender."""
+import asyncio
 import logging
 from typing import Optional
 
@@ -41,21 +42,37 @@ class HACommandSender:
             need_temp = command.target_temperature is not None
 
             if need_mode and need_temp:
-                # Set both mode and temperature in one call
-                service_data[ATTR_HVAC_MODE] = command.hvac_mode.value
-                service_data[ATTR_TEMPERATURE] = command.target_temperature.value
+                # Set mode and temperature separately for better compatibility
+                # Some integrations don't support setting both in one call
 
+                # First, set the mode
+                mode_data = {"entity_id": entity_id, ATTR_HVAC_MODE: command.hvac_mode.value}
                 _LOGGER.info(
-                    "Setting climate %s: mode=%s, temp=%.1f",
+                    "Setting climate %s: mode=%s",
                     entity_id,
                     command.hvac_mode.value,
-                    command.target_temperature.value,
+                )
+                await self.hass.services.async_call(
+                    CLIMATE_DOMAIN,
+                    SERVICE_SET_HVAC_MODE,
+                    mode_data,
+                    blocking=True,
                 )
 
+                # Small delay for device to process mode change
+                await asyncio.sleep(0.5)
+
+                # Then, set the temperature
+                temp_data = {"entity_id": entity_id, ATTR_TEMPERATURE: command.target_temperature.value}
+                _LOGGER.info(
+                    "Setting climate %s: temp=%.1f",
+                    entity_id,
+                    command.target_temperature.value,
+                )
                 await self.hass.services.async_call(
                     CLIMATE_DOMAIN,
                     SERVICE_SET_TEMPERATURE,
-                    service_data,
+                    temp_data,
                     blocking=True,
                 )
 
