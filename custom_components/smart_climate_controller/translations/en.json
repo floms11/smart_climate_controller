@@ -1,41 +1,45 @@
 {
   "config": {
     "step": {
-      "add_room": {
-        "title": "Add Room",
-        "description": "Configure a room for climate control",
+      "user": {
+        "title": "Configure Multi-Split System",
+        "description": "Add air conditioners to your multi-split system"
+      },
+      "add_ac": {
+        "title": "Add AC Unit",
+        "description": "Add an air conditioner to your multi-split system",
         "data": {
-          "room_name": "Room Name",
-          "climate_entity": "Air Conditioner",
-          "indoor_temp_sensor": "Indoor Temperature Sensor",
-          "outdoor_temp_sensor": "Outdoor Temperature Sensor",
-          "multi_split_group": "Multi-Split Group (optional)"
+          "ac_name": "AC Unit Name",
+          "climate_entity": "Climate Entity",
+          "indoor_temp_sensor": "Indoor Temperature Sensor"
         }
       },
       "add_another": {
-        "title": "Add Another Room?",
-        "description": "You have added {rooms_count} room(s). Add another?",
+        "title": "Add Another AC?",
+        "description": "You have added {ac_count} AC unit(s). Add another?",
         "data": {
-          "add_another": "Add another room"
+          "add_another": "Add another AC unit"
         }
       },
       "global_settings": {
         "title": "Global Settings",
         "description": "Configure global parameters for climate control",
         "data": {
+          "outdoor_temp_sensor": "Outdoor Temperature Sensor",
           "outdoor_temp_heat_only": "Outdoor temp for heat-only mode",
           "outdoor_temp_cool_only": "Outdoor temp for cool-only mode",
           "minor_correction_hysteresis": "Minor correction hysteresis",
           "minor_correction_value": "Minor correction value",
           "major_correction_value": "Major correction value",
           "major_deviation_threshold": "Major deviation threshold",
+          "mode_switch_temp_threshold": "Mode switch temperature threshold",
           "min_mode_switch_interval": "Min mode switch interval (seconds)",
           "min_power_switch_interval": "Min power switch interval (seconds)"
         }
       }
     },
     "error": {
-      "duplicate_room_name": "Room name already exists"
+      "duplicate_ac_name": "AC unit name already exists"
     },
     "abort": {
       "already_configured": "Integration is already configured"
@@ -47,26 +51,28 @@
         "title": "Smart Climate Controller Options",
         "menu_options": {
           "global_settings": "Global Settings",
-          "manage_rooms": "Manage Rooms"
+          "manage_rooms": "Manage AC Units"
         }
       },
       "global_settings": {
         "title": "Global Settings",
         "description": "Configure global parameters for climate control",
         "data": {
+          "outdoor_temp_sensor": "Outdoor Temperature Sensor",
           "outdoor_temp_heat_only": "Outdoor temp for heat-only mode",
           "outdoor_temp_cool_only": "Outdoor temp for cool-only mode",
           "minor_correction_hysteresis": "Minor correction hysteresis",
           "minor_correction_value": "Minor correction value",
           "major_correction_value": "Major correction value",
           "major_deviation_threshold": "Major deviation threshold",
+          "mode_switch_temp_threshold": "Mode switch temperature threshold",
           "min_mode_switch_interval": "Min mode switch interval (seconds)",
           "min_power_switch_interval": "Min power switch interval (seconds)"
         }
       }
     },
     "abort": {
-      "rooms_require_reconfiguration": "To change rooms, please remove and re-add the integration"
+      "ac_units_require_reconfiguration": "To change AC units, please remove and re-add the integration"
     }
   }
 }
