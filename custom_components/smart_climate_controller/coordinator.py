@@ -6,6 +6,7 @@ from typing import Optional
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
+from homeassistant.util import dt as dt_util
 
 from .const import DOMAIN
 from .infrastructure.ha_state import HAStateReader
@@ -92,8 +93,8 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
                 _LOGGER.warning("Climate entity unavailable")
                 return self._get_safe_data()
 
-            # Get current timestamp
-            now = datetime.now()
+            # Get current timestamp (timezone-aware)
+            now = dt_util.utcnow()
 
             # Track temperature for dynamics calculation
             self.temp_tracker.add_measurement(room_temp, now)

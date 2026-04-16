@@ -3,6 +3,7 @@ import logging
 from collections import deque
 from datetime import datetime, timedelta
 from typing import Optional
+from homeassistant.util import dt as dt_util
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -30,7 +31,7 @@ class TemperatureTracker:
             timestamp: Measurement timestamp (default: now)
         """
         if timestamp is None:
-            timestamp = datetime.now()
+            timestamp = dt_util.utcnow()
 
         self._history.append((timestamp, temperature))
 
@@ -38,6 +39,13 @@ class TemperatureTracker:
         cutoff = timestamp - timedelta(minutes=15)
         while self._history and self._history[0][0] < cutoff:
             self._history.popleft()
+
+        _LOGGER.debug(
+            "Added temperature measurement: %.1f°C at %s, history size: %d",
+            temperature,
+            timestamp.isoformat(),
+            len(self._history),
+        )
 
     def get_short_term_rate(self, now: Optional[datetime] = None) -> Optional[float]:
         """
@@ -69,9 +77,10 @@ class TemperatureTracker:
             Rate in °C/hour, or None if insufficient data
         """
         if now is None:
-            now = datetime.now()
+            now = dt_util.utcnow()
 
         if len(self._history) < 2:
+            _LOGGER.debug("Insufficient data for rate calculation: %d measurements", len(self._history))
             return None
 
         # Find measurements within time window
