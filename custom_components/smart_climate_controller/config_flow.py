@@ -20,6 +20,7 @@ from .const import (
     CONF_MIN_POWER_SWITCH_INTERVAL,
     CONF_MINOR_CORRECTION_HYSTERESIS,
     CONF_MINOR_CORRECTION_VALUE,
+    CONF_MODE_SWITCH_TEMP_THRESHOLD,
     CONF_OUTDOOR_TEMP_COOL_ONLY,
     CONF_OUTDOOR_TEMP_HEAT_ONLY,
     CONF_OUTDOOR_TEMP_SENSOR,
@@ -29,6 +30,7 @@ from .const import (
     DEFAULT_MIN_POWER_SWITCH_INTERVAL,
     DEFAULT_MINOR_CORRECTION_HYSTERESIS,
     DEFAULT_MINOR_CORRECTION_VALUE,
+    DEFAULT_MODE_SWITCH_TEMP_THRESHOLD,
     DEFAULT_OUTDOOR_TEMP_COOL_ONLY,
     DEFAULT_OUTDOOR_TEMP_HEAT_ONLY,
     DOMAIN,
@@ -187,6 +189,14 @@ class SmartClimateControllerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN)
                     )
                 ),
                 vol.Required(
+                    CONF_MODE_SWITCH_TEMP_THRESHOLD,
+                    default=DEFAULT_MODE_SWITCH_TEMP_THRESHOLD,
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=0.5, max=3.0, step=0.1, unit_of_measurement="°C"
+                    )
+                ),
+                vol.Required(
                     CONF_MIN_MODE_SWITCH_INTERVAL,
                     default=DEFAULT_MIN_MODE_SWITCH_INTERVAL,
                 ): selector.NumberSelector(
@@ -219,6 +229,11 @@ class SmartClimateControllerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN)
 
 class SmartClimateControllerOptionsFlow(config_entries.OptionsFlow):
     """Handle options flow for Smart Climate Controller."""
+
+    def __init__(self, config_entry):
+        """Initialize options flow."""
+        # config_entry is already available as self.config_entry from parent class
+        super().__init__()
 
     async def async_step_init(self, user_input=None):
         """Manage the options."""
@@ -288,6 +303,16 @@ class SmartClimateControllerOptionsFlow(config_entries.OptionsFlow):
                     CONF_MAJOR_DEVIATION_THRESHOLD,
                     default=options.get(
                         CONF_MAJOR_DEVIATION_THRESHOLD, DEFAULT_MAJOR_DEVIATION_THRESHOLD
+                    ),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=0.5, max=3.0, step=0.1, unit_of_measurement="°C"
+                    )
+                ),
+                vol.Required(
+                    CONF_MODE_SWITCH_TEMP_THRESHOLD,
+                    default=options.get(
+                        CONF_MODE_SWITCH_TEMP_THRESHOLD, DEFAULT_MODE_SWITCH_TEMP_THRESHOLD
                     ),
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(

@@ -22,6 +22,7 @@ from .const import (
     CONF_MIN_POWER_SWITCH_INTERVAL,
     CONF_MINOR_CORRECTION_HYSTERESIS,
     CONF_MINOR_CORRECTION_VALUE,
+    CONF_MODE_SWITCH_TEMP_THRESHOLD,
     CONF_OUTDOOR_TEMP_COOL_ONLY,
     CONF_OUTDOOR_TEMP_HEAT_ONLY,
     CONF_OUTDOOR_TEMP_SENSOR,
@@ -33,6 +34,7 @@ from .const import (
     DEFAULT_MIN_POWER_SWITCH_INTERVAL,
     DEFAULT_MINOR_CORRECTION_HYSTERESIS,
     DEFAULT_MINOR_CORRECTION_VALUE,
+    DEFAULT_MODE_SWITCH_TEMP_THRESHOLD,
     DEFAULT_OUTDOOR_TEMP_COOL_ONLY,
     DEFAULT_OUTDOOR_TEMP_HEAT_ONLY,
     STORAGE_KEY,
@@ -295,8 +297,9 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
         heat_need_score = 0
         cool_need_score = 0
 
-        major_deviation_threshold = self._get_global_option(
-            CONF_MAJOR_DEVIATION_THRESHOLD, DEFAULT_MAJOR_DEVIATION_THRESHOLD
+        # Use mode switch temperature threshold for mode switching decisions
+        mode_switch_threshold = self._get_global_option(
+            CONF_MODE_SWITCH_TEMP_THRESHOLD, DEFAULT_MODE_SWITCH_TEMP_THRESHOLD
         )
 
         for room_name in room_names:
@@ -312,11 +315,11 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
 
             temp_diff = indoor_temp - room_state.target_temperature
 
-            # Only count deviations greater than threshold to minimize mode switching
-            if temp_diff < -major_deviation_threshold:
+            # Only count deviations greater than mode_switch_threshold to minimize mode switching
+            if temp_diff < -mode_switch_threshold:
                 heat_need_score += 10  # Need heating
 
-            if temp_diff > major_deviation_threshold:
+            if temp_diff > mode_switch_threshold:
                 cool_need_score += 10  # Need cooling
 
         # Decide based on scores
