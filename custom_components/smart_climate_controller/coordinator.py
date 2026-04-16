@@ -69,6 +69,7 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
             _LOGGER,
             name="Smart Climate Controller",
             update_interval=UPDATE_INTERVAL,
+            config_entry=entry,
         )
         self.entry = entry
         self._store = Store(hass, STORAGE_VERSION, STORAGE_KEY)
