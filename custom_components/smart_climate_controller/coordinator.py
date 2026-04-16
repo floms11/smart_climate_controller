@@ -54,6 +54,7 @@ class RoomState:
         self.hvac_mode: HVACMode = HVACMode.OFF
         self.last_mode_switch: datetime | None = None
         self.last_power_switch: datetime | None = None
+        self.last_physical_mode: HVACMode | None = None  # Track last physical mode (heat/cool)
 
 
 class SmartClimateCoordinator(DataUpdateCoordinator):
@@ -163,9 +164,15 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
                              room_name, room_state, room_state.hvac_mode if room_state else None)
                 continue
 
-            _LOGGER.debug("Room %s: controlling temperature (physical_mode=%s, target=%.1f)",
-                         room_name, physical_mode, room_state.target_temperature)
-            await self._control_room_temperature(room_name, physical_mode)
+            # Check if physical mode changed for this room
+            mode_changed = room_state.last_physical_mode != physical_mode
+
+            _LOGGER.debug("Room %s: controlling temperature (physical_mode=%s, target=%.1f, mode_changed=%s)",
+                         room_name, physical_mode, room_state.target_temperature, mode_changed)
+            await self._control_room_temperature(room_name, physical_mode, mode_changed)
+
+            # Update last physical mode
+            room_state.last_physical_mode = physical_mode
 
     def _determine_group_hvac_mode(self, room_names: list[str]) -> HVACMode:
         """Determine group HVAC mode based on thermostat modes.
@@ -328,10 +335,15 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
             # No clear need and no current mode - default to cool in transition zone
             return HVACMode.COOL
 
-    async def _control_room_temperature(self, room_name: str, physical_mode: HVACMode):
+    async def _control_room_temperature(self, room_name: str, physical_mode: HVACMode, mode_changed: bool = False):
         """Control room temperature based on physical mode.
 
         Implements minor and major temperature correction logic.
+
+        Args:
+            room_name: Name of the room to control
+            physical_mode: Physical HVAC mode (HEAT/COOL)
+            mode_changed: True if physical mode just changed (e.g. heat -> cool)
         """
         room_state = self._room_states.get(room_name)
         room_config = self._get_room_config(room_name)
@@ -397,12 +409,21 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
                     room_name, target_temp, minor_correction, ac_target_temp
                 )
             else:
-                # Within acceptable range - set target temp
-                ac_target_temp = target_temp
-                _LOGGER.info(
-                    "Room %s: HEAT mode - within range (diff %.1f), set target %.1f",
-                    room_name, temp_diff, ac_target_temp
-                )
+                # Within acceptable range
+                if mode_changed:
+                    # Mode just changed - turn off ACs in acceptable range
+                    should_turn_off = True
+                    _LOGGER.info(
+                        "Room %s: HEAT mode - within acceptable range (diff %.1f), mode changed - turning off",
+                        room_name, temp_diff
+                    )
+                else:
+                    # Normal operation - set target temperature
+                    ac_target_temp = target_temp
+                    _LOGGER.info(
+                        "Room %s: HEAT mode - within acceptable range (diff %.1f) - set target %.1f",
+                        room_name, temp_diff, ac_target_temp
+                    )
 
         elif physical_mode == HVACMode.COOL:
             # Cooling mode logic
@@ -428,12 +449,21 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
                     room_name, target_temp, minor_correction, ac_target_temp
                 )
             else:
-                # Within acceptable range - set target temp
-                ac_target_temp = target_temp
-                _LOGGER.info(
-                    "Room %s: COOL mode - within range (diff %.1f), set target %.1f",
-                    room_name, temp_diff, ac_target_temp
-                )
+                # Within acceptable range
+                if mode_changed:
+                    # Mode just changed - turn off ACs in acceptable range
+                    should_turn_off = True
+                    _LOGGER.info(
+                        "Room %s: COOL mode - within acceptable range (diff %.1f), mode changed - turning off",
+                        room_name, temp_diff
+                    )
+                else:
+                    # Normal operation - set target temperature
+                    ac_target_temp = target_temp
+                    _LOGGER.info(
+                        "Room %s: COOL mode - within acceptable range (diff %.1f) - set target %.1f",
+                        room_name, temp_diff, ac_target_temp
+                    )
 
         # Ensure temperature is within AC limits
         if ac_target_temp is not None:
