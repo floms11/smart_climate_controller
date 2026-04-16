@@ -361,6 +361,10 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
             CONF_MAJOR_DEVIATION_THRESHOLD, DEFAULT_MAJOR_DEVIATION_THRESHOLD
         )
 
+        # AC temperature limits (from climate entity attributes)
+        AC_MIN_TEMP = 16.0
+        AC_MAX_TEMP = 30.0
+
         ac_target_temp = None
         should_turn_off = False
 
@@ -371,10 +375,10 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
                 should_turn_off = True
             elif temp_diff < -major_threshold:
                 # Room is too cold - major correction
-                ac_target_temp = target_temp + major_correction
+                ac_target_temp = min(target_temp + major_correction, AC_MAX_TEMP)
             elif temp_diff < -minor_hysteresis:
                 # Room is slightly cold - minor correction
-                ac_target_temp = target_temp + minor_correction
+                ac_target_temp = min(target_temp + minor_correction, AC_MAX_TEMP)
             else:
                 # Within acceptable range - set target temp
                 ac_target_temp = target_temp
@@ -386,13 +390,23 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
                 should_turn_off = True
             elif temp_diff > major_threshold:
                 # Room is too hot - major correction
-                ac_target_temp = target_temp - major_correction
+                ac_target_temp = max(target_temp - major_correction, AC_MIN_TEMP)
             elif temp_diff > minor_hysteresis:
                 # Room is slightly hot - minor correction
-                ac_target_temp = target_temp - minor_correction
+                ac_target_temp = max(target_temp - minor_correction, AC_MIN_TEMP)
             else:
                 # Within acceptable range - set target temp
                 ac_target_temp = target_temp
+
+        # Ensure temperature is within AC limits
+        if ac_target_temp is not None:
+            original_temp = ac_target_temp
+            ac_target_temp = max(AC_MIN_TEMP, min(AC_MAX_TEMP, ac_target_temp))
+            if original_temp != ac_target_temp:
+                _LOGGER.warning(
+                    "Room %s: clamped temperature from %.1f to %.1f (AC limits: %.1f-%.1f)",
+                    room_name, original_temp, ac_target_temp, AC_MIN_TEMP, AC_MAX_TEMP
+                )
 
         # Apply control
         if should_turn_off:
