@@ -396,28 +396,28 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
         if physical_mode == HVACMode.HEAT:
             # Heating mode logic
             if temp_diff > major_threshold:
-                # Room is too hot - turn off AC
+                # Room is too hot (>1°C above target) - turn off AC
                 should_turn_off = True
                 _LOGGER.info(
-                    "Room %s: 🔴 HEAT mode - room too hot (diff %.1f > threshold %.1f) - TURNING OFF",
+                    "Room %s: 🔴 HEAT mode - room too hot (diff %.1f > %.1f) - TURNING OFF",
                     room_name, temp_diff, major_threshold
                 )
             elif temp_diff < -major_threshold:
-                # Room is too cold - major correction
+                # Room is very cold (<-1°C) - major correction
                 ac_target_temp = min(target_temp + major_correction, AC_MAX_TEMP)
                 _LOGGER.info(
                     "Room %s: HEAT mode - major correction: %.1f + %.1f = %.1f",
                     room_name, target_temp, major_correction, ac_target_temp
                 )
             elif temp_diff < -minor_hysteresis:
-                # Room is slightly cold - minor correction
+                # Room needs heating (colder than -0.5°C) - minor correction
                 ac_target_temp = min(target_temp + minor_correction, AC_MAX_TEMP)
                 _LOGGER.info(
                     "Room %s: HEAT mode - minor correction: %.1f + %.1f = %.1f",
                     room_name, target_temp, minor_correction, ac_target_temp
                 )
             else:
-                # Within acceptable range
+                # Within acceptable range (-0.5°C to +1°C)
                 if mode_changed:
                     # Mode just changed - turn off ACs in acceptable range
                     should_turn_off = True
@@ -436,28 +436,28 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
         elif physical_mode == HVACMode.COOL:
             # Cooling mode logic
             if temp_diff < -major_threshold:
-                # Room is too cold - turn off AC
+                # Room is too cold (<-1°C below target) - turn off AC
                 should_turn_off = True
                 _LOGGER.info(
-                    "Room %s: 🔴 COOL mode - room too cold (diff %.1f < -threshold %.1f) - TURNING OFF",
+                    "Room %s: 🔴 COOL mode - room too cold (diff %.1f < -%.1f) - TURNING OFF",
                     room_name, temp_diff, major_threshold
                 )
             elif temp_diff > major_threshold:
-                # Room is too hot - major correction
+                # Room is very hot (>1°C) - major correction
                 ac_target_temp = max(target_temp - major_correction, AC_MIN_TEMP)
                 _LOGGER.info(
                     "Room %s: COOL mode - major correction: %.1f - %.1f = %.1f",
                     room_name, target_temp, major_correction, ac_target_temp
                 )
             elif temp_diff > minor_hysteresis:
-                # Room is slightly hot - minor correction
+                # Room needs cooling (warmer than +0.5°C) - minor correction
                 ac_target_temp = max(target_temp - minor_correction, AC_MIN_TEMP)
                 _LOGGER.info(
                     "Room %s: COOL mode - minor correction: %.1f - %.1f = %.1f",
                     room_name, target_temp, minor_correction, ac_target_temp
                 )
             else:
-                # Within acceptable range
+                # Within acceptable range (-1°C to +0.5°C)
                 if mode_changed:
                     # Mode just changed - turn off ACs in acceptable range
                     should_turn_off = True
