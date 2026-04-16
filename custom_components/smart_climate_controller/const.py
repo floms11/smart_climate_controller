@@ -24,6 +24,7 @@ CONF_MIN_COMMAND_INTERVAL: Final = "min_command_interval"
 CONF_MIN_MODE_SWITCH_INTERVAL: Final = "min_mode_switch_interval"
 CONF_CONTROL_INTERVAL: Final = "control_interval"
 CONF_ENABLE_DEBUG_SENSORS: Final = "enable_debug_sensors"
+CONF_MULTI_SPLIT_GROUP: Final = "multi_split_group"
 
 # Defaults
 DEFAULT_ZONE_NAME: Final = "Climate Zone"
@@ -60,3 +61,5 @@ ATTR_DESIRED_MODE: Final = "desired_mode"
 ATTR_DESIRED_SETPOINT: Final = "desired_setpoint"
 ATTR_MODE_LOCKED_UNTIL: Final = "mode_locked_until"
 ATTR_COMMAND_LOCKED_UNTIL: Final = "command_locked_until"
+ATTR_MULTI_SPLIT_GROUP: Final = "multi_split_group"
+ATTR_GROUP_SHARED_MODE: Final = "group_shared_mode"

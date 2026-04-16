@@ -11,6 +11,7 @@ from .infrastructure.ha_state import HAStateReader
 from .infrastructure.ha_commands import HACommandSender
 from .application.controller import ClimateController
 from .application.commands import SetClimateCommand
+from .multi_split_coordinator import get_multi_split_coordinator
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -45,6 +46,10 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
         # Controller state
         self.controller_enabled = True
 
+        # Multi-split support
+        self.multi_split_coordinator = get_multi_split_coordinator(hass)
+        self.multi_split_group_id = config.get("multi_split_group")
+
     async def _async_update_data(self):
         """Execute control cycle and return diagnostic data."""
         try:
@@ -66,6 +71,13 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
             if climate_state is None:
                 _LOGGER.warning("Climate entity unavailable")
                 return self._get_safe_data()
+
+            # Get multi-split shared mode if applicable
+            multi_split_shared_mode = None
+            if self.multi_split_group_id:
+                multi_split_shared_mode = self.multi_split_coordinator.get_group_shared_mode(
+                    self.entry_id
+                )
 
             # Execute control cycle
             command, decision = self.controller.execute_control_cycle(
@@ -93,6 +105,8 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
                 min_mode_switch_interval=self.config["min_mode_switch_interval"],
                 min_command_interval=self.config["min_command_interval"],
                 controller_enabled=self.controller_enabled,
+                # Multi-split support
+                multi_split_group_shared_mode=multi_split_shared_mode.value if multi_split_shared_mode else None,
             )
 
             # Send command if needed
@@ -101,6 +115,18 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
                     command,
                     climate_entity,
                 )
+
+            # Get multi-split info if applicable
+            multi_split_info = None
+            if self.multi_split_group_id:
+                group = self.multi_split_coordinator.get_group_for_zone(self.entry_id)
+                if group:
+                    multi_split_info = {
+                        "group_id": group.group_id,
+                        "group_name": group.group_name,
+                        "shared_mode": group.current_shared_mode.value if group.current_shared_mode else None,
+                        "last_mode_change": group.last_mode_change.isoformat() if group.last_mode_change else None,
+                    }
 
             # Return diagnostic data
             return {
@@ -111,6 +137,7 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
                 "device_mode": climate_state["hvac_mode"],
                 "device_setpoint": climate_state["target_temperature"],
                 "controller_diagnostics": self.controller.get_diagnostics(),
+                "multi_split_info": multi_split_info,
             }
 
         except Exception as err:

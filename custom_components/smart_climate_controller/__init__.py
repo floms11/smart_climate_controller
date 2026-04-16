@@ -7,6 +7,7 @@ from homeassistant.const import Platform
 
 from .const import DOMAIN
 from .coordinator import SmartClimateCoordinator
+from .multi_split_coordinator import get_multi_split_coordinator
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -27,6 +28,32 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Store coordinator
     hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN][entry.entry_id] = coordinator
+
+    # Register multi-split group if configured
+    multi_split_group_id = entry.data.get("multi_split_group")
+    if multi_split_group_id:
+        multi_split_coordinator = get_multi_split_coordinator(hass)
+
+        # Check if group already exists, if not create it
+        if multi_split_group_id not in multi_split_coordinator.get_all_groups():
+            zone_name = entry.data.get("zone_name", "Unknown Zone")
+            multi_split_coordinator.register_group(
+                group_id=multi_split_group_id,
+                group_name=f"Multi-Split Group {multi_split_group_id}",
+                zone_ids=[entry.entry_id],
+            )
+            _LOGGER.info("Created multi-split group: %s", multi_split_group_id)
+        else:
+            # Add this zone to existing group
+            group = multi_split_coordinator.get_all_groups()[multi_split_group_id]
+            if entry.entry_id not in group.zone_ids:
+                group.add_zone(entry.entry_id)
+                multi_split_coordinator.zone_to_group[entry.entry_id] = multi_split_group_id
+                _LOGGER.info(
+                    "Added zone %s to multi-split group %s",
+                    entry.data.get("zone_name"),
+                    multi_split_group_id,
+                )
 
     # Fetch initial data
     await coordinator.async_config_entry_first_refresh()

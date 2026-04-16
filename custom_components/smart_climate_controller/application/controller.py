@@ -78,6 +78,8 @@ class ClimateController:
         min_mode_switch_interval: int,
         min_command_interval: int,
         controller_enabled: bool,
+        # Multi-split support
+        multi_split_group_shared_mode: Optional[str] = None,
         # Optional overrides
         now: Optional[datetime] = None,
     ) -> tuple[Optional[SetClimateCommand], ControlDecision]:
