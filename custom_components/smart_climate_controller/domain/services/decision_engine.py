@@ -184,6 +184,14 @@ class ClimateDecisionEngine:
         """
         current_state = context.device_state
 
+        _LOGGER.debug(
+            "Checking if should send command: desired_mode=%s, current_mode=%s, desired_setpoint=%s, current_setpoint=%s",
+            desired_mode.value,
+            current_state.hvac_mode.value,
+            desired_setpoint.value if desired_setpoint else None,
+            current_state.current_setpoint.value if current_state.current_setpoint else None,
+        )
+
         # Check command interval timing
         if context.last_command_sent is not None:
             elapsed = (context.now - context.last_command_sent).total_seconds()
@@ -197,10 +205,12 @@ class ClimateDecisionEngine:
 
         # If mode is different, send command
         if desired_mode != current_state.hvac_mode:
+            _LOGGER.debug("Mode changed: %s -> %s, will send command", current_state.hvac_mode.value, desired_mode.value)
             return True
 
         # If turning off, and already off, don't send
         if desired_mode == HVACMode.OFF and current_state.hvac_mode == HVACMode.OFF:
+            _LOGGER.debug("Already OFF, no command needed")
             return False
 
         # If setpoint changed significantly, send command
@@ -208,7 +218,9 @@ class ClimateDecisionEngine:
             current_state.current_setpoint,
             desired_setpoint,
         ):
+            _LOGGER.debug("Setpoint changed significantly, will send command")
             return True
 
         # No meaningful change
+        _LOGGER.debug("No meaningful change, no command needed")
         return False

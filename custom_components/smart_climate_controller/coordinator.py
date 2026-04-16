@@ -80,6 +80,13 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
                     self.entry_id
                 )
 
+            _LOGGER.debug(
+                "Control cycle starting: manual_mode=%s, controller_enabled=%s, device_mode=%s",
+                self.manual_mode_override,
+                self.controller_enabled,
+                climate_state["hvac_mode"],
+            )
+
             # Execute control cycle
             command, decision = self.controller.execute_control_cycle(
                 # Sensor data
@@ -114,9 +121,22 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
 
             # Send command if needed
             if command is not None:
+                _LOGGER.info(
+                    "Sending command: mode=%s, temp=%s, should_send=%s",
+                    command.hvac_mode.value,
+                    command.target_temperature.value if command.target_temperature else "None",
+                    decision.should_send_command,
+                )
                 await self.command_sender.send_climate_command(
                     command,
                     climate_entity,
+                )
+            else:
+                _LOGGER.debug(
+                    "No command to send. Decision: %s, should_send=%s, reason: %s",
+                    decision.decision_type.value,
+                    decision.should_send_command,
+                    decision.reason,
                 )
 
             # Get multi-split info if applicable
