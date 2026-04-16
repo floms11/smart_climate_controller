@@ -8,5 +8,5 @@
   "iot_class": "calculated",
   "issue_tracker": "https://github.com/floms/smart_climate_controller/issues",
   "requirements": [],
-  "version": "0.5.4"
+  "version": "0.5.5"
 }

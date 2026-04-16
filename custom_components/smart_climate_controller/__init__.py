@@ -160,6 +160,12 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
     _LOGGER.info("Unloading Smart Climate Controller: %s", entry.data.get("zone_name"))
 
+    # Save state before unloading
+    if entry.entry_id in hass.data[DOMAIN]:
+        coordinator = hass.data[DOMAIN][entry.entry_id]
+        _LOGGER.info("Saving state before unload...")
+        await coordinator.async_save_state()
+
     # Unload platforms
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
 

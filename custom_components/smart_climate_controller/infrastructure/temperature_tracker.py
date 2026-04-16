@@ -129,3 +129,59 @@ class TemperatureTracker:
     def clear(self) -> None:
         """Clear all history."""
         self._history.clear()
+
+    def to_dict(self) -> dict:
+        """
+        Serialize temperature history to dict for persistence.
+
+        Returns:
+            Dict with serialized history
+        """
+        return {
+            "history": [
+                {
+                    "timestamp": timestamp.isoformat(),
+                    "temperature": temp,
+                }
+                for timestamp, temp in self._history
+            ]
+        }
+
+    def from_dict(self, data: dict) -> None:
+        """
+        Restore temperature history from dict.
+
+        Args:
+            data: Dict with serialized history
+        """
+        if not data or "history" not in data:
+            _LOGGER.warning("No valid history data to restore")
+            return
+
+        self._history.clear()
+
+        history_data = data["history"]
+        if not isinstance(history_data, list):
+            _LOGGER.error("Invalid history data format")
+            return
+
+        restored_count = 0
+        for entry in history_data:
+            try:
+                timestamp_str = entry["timestamp"]
+                temperature = entry["temperature"]
+
+                # Parse ISO format timestamp
+                timestamp = dt_util.parse_datetime(timestamp_str)
+                if timestamp is None:
+                    _LOGGER.warning("Failed to parse timestamp: %s", timestamp_str)
+                    continue
+
+                self._history.append((timestamp, temperature))
+                restored_count += 1
+
+            except (KeyError, ValueError, TypeError) as err:
+                _LOGGER.warning("Failed to restore history entry: %s", err)
+                continue
+
+        _LOGGER.info("Restored %d temperature measurements from persistent storage", restored_count)

@@ -6,6 +6,7 @@ from typing import Optional
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
+from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
 from .const import DOMAIN
@@ -64,8 +65,19 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
         self.multi_split_coordinator = get_multi_split_coordinator(hass)
         self.multi_split_group_id = config.get("multi_split_group")
 
+        # Persistent storage
+        self._store = Store(
+            hass,
+            version=1,
+            key=f"{DOMAIN}.{entry_id}",
+            private=False,
+        )
+
         # Setup state listener for climate entity
         self._setup_state_listener()
+
+        # Restore state from persistent storage
+        hass.async_create_task(self._async_restore_state())
 
     async def _async_update_data(self):
         """Execute control cycle and return diagnostic data."""
@@ -209,6 +221,9 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
                         "shared_mode": group.current_shared_mode.value if group.current_shared_mode else None,
                         "last_mode_change": group.last_mode_change.isoformat() if group.last_mode_change else None,
                     }
+
+            # Save state to persistent storage (async, don't wait)
+            self.hass.async_create_task(self.async_save_state())
 
             # Return diagnostic data
             return {
@@ -395,3 +410,57 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
             state_change_listener,
         )
         _LOGGER.info("State listener registered for %s", climate_entity)
+
+    async def _async_restore_state(self) -> None:
+        """Restore state from persistent storage."""
+        try:
+            data = await self._store.async_load()
+            if data is None:
+                _LOGGER.info("No persistent state found for %s", self.entry_id)
+                return
+
+            _LOGGER.info("Restoring state from persistent storage for %s", self.entry_id)
+
+            # Restore temperature tracker history
+            if "temperature_tracker" in data:
+                self.temp_tracker.from_dict(data["temperature_tracker"])
+
+            # Restore anti-flapping timestamps
+            if "last_run_start" in data and data["last_run_start"]:
+                self.last_run_start = dt_util.parse_datetime(data["last_run_start"])
+                _LOGGER.debug("Restored last_run_start: %s", self.last_run_start)
+
+            if "last_idle_start" in data and data["last_idle_start"]:
+                self.last_idle_start = dt_util.parse_datetime(data["last_idle_start"])
+                _LOGGER.debug("Restored last_idle_start: %s", self.last_idle_start)
+
+            if "last_setpoint_adjustment" in data and data["last_setpoint_adjustment"]:
+                self.last_setpoint_adjustment = dt_util.parse_datetime(data["last_setpoint_adjustment"])
+                _LOGGER.debug("Restored last_setpoint_adjustment: %s", self.last_setpoint_adjustment)
+
+            # Restore last known device mode
+            if "last_known_device_mode" in data:
+                self._last_known_device_mode = data["last_known_device_mode"]
+                _LOGGER.debug("Restored last_known_device_mode: %s", self._last_known_device_mode)
+
+            _LOGGER.info("State restoration completed for %s", self.entry_id)
+
+        except Exception as err:
+            _LOGGER.error("Error restoring state: %s", err, exc_info=True)
+
+    async def async_save_state(self) -> None:
+        """Save current state to persistent storage."""
+        try:
+            data = {
+                "temperature_tracker": self.temp_tracker.to_dict(),
+                "last_run_start": self.last_run_start.isoformat() if self.last_run_start else None,
+                "last_idle_start": self.last_idle_start.isoformat() if self.last_idle_start else None,
+                "last_setpoint_adjustment": self.last_setpoint_adjustment.isoformat() if self.last_setpoint_adjustment else None,
+                "last_known_device_mode": self._last_known_device_mode,
+            }
+
+            await self._store.async_save(data)
+            _LOGGER.debug("State saved to persistent storage for %s", self.entry_id)
+
+        except Exception as err:
+            _LOGGER.error("Error saving state: %s", err, exc_info=True)
