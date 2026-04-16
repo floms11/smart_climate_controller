@@ -8,15 +8,15 @@ from ..value_objects import HVACMode, ControlContext, Temperature
 _LOGGER = logging.getLogger(__name__)
 
 
-class DynamicSetpointAdjustmentPolicy(SetpointAdjustmentPolicy):
+class IterativeSetpointAdjustmentPolicy(SetpointAdjustmentPolicy):
     """
-    Calculates device setpoint using dynamic offset based on:
-    - Temperature error (deviation from target)
-    - Rate of temperature change
-    - Current HVAC mode
+    Iterative setpoint adjustment policy.
 
-    Key principle: Modulate setpoint to achieve gradual convergence,
-    not aggressive on/off cycling.
+    Key principles:
+    - Adjust setpoint by small steps (default 1°C)
+    - Wait and observe dynamics before next adjustment
+    - Don't adjust if good dynamics already present
+    - Consider outdoor temperature for natural drift
     """
 
     def calculate_setpoint(
@@ -24,10 +24,22 @@ class DynamicSetpointAdjustmentPolicy(SetpointAdjustmentPolicy):
         mode: HVACMode,
         room_temp: Temperature,
         target_temp: Temperature,
-        temp_rate: Optional[float],
+        temp_rate: Optional[float],  # Short-term rate (1 minute)
         context: ControlContext,
     ) -> tuple[Temperature, str]:
-        """Calculate optimal setpoint for gradual temperature control."""
+        """
+        Calculate setpoint using iterative adjustment logic.
+
+        Args:
+            mode: Current HVAC mode (HEAT/COOL/OFF)
+            room_temp: Current room temperature
+            target_temp: Target temperature
+            temp_rate: Short-term temperature change rate (°C/hour)
+            context: Full control context
+
+        Returns:
+            Tuple of (desired setpoint, reasoning string)
+        """
 
         if mode == HVACMode.OFF:
             return target_temp, "Device off, setpoint = target"
@@ -35,126 +47,127 @@ class DynamicSetpointAdjustmentPolicy(SetpointAdjustmentPolicy):
         if mode not in (HVACMode.HEAT, HVACMode.COOL):
             return target_temp, f"Mode {mode.value} - using target as setpoint"
 
+        # Get current setpoint on AC device
+        current_setpoint = context.device_state.current_setpoint
+        if current_setpoint is None:
+            # No current setpoint, start with target
+            return target_temp, "No current setpoint, starting with target"
+
+        current_setpoint_value = current_setpoint.value
+
         # Calculate temperature error
         temp_error = float(room_temp - target_temp)
 
-        # Base offset direction depends on mode
+        # Check if we're in deadband (temperature is acceptable)
+        in_deadband = abs(temp_error) <= context.deadband
+
+        # Determine if we have good dynamics
+        has_good_dynamics = False
+        if temp_rate is not None and not in_deadband:
+            # Good dynamics threshold: at least 0.5°C/hour movement in correct direction
+            min_dynamics = 0.5
+
+            if mode == HVACMode.COOL and temp_error > context.deadband:
+                # Need cooling: good if temperature is decreasing
+                has_good_dynamics = temp_rate < -min_dynamics
+            elif mode == HVACMode.HEAT and temp_error < -context.deadband:
+                # Need heating: good if temperature is increasing
+                has_good_dynamics = temp_rate > min_dynamics
+
+        # If we have good dynamics, keep current setpoint
+        if has_good_dynamics:
+            _LOGGER.debug(
+                "Good dynamics detected: %.1f°C/h in %s mode, keeping setpoint %.1f",
+                temp_rate,
+                mode.value,
+                current_setpoint_value,
+            )
+            return current_setpoint, f"Good dynamics ({temp_rate:.1f}°C/h), keeping setpoint"
+
+        # If in deadband, keep current setpoint
+        if in_deadband:
+            return current_setpoint, f"In deadband (error={temp_error:.1f}°C), keeping setpoint"
+
+        # Check if enough time passed since last adjustment
+        if hasattr(context, 'last_setpoint_adjustment') and context.last_setpoint_adjustment is not None:
+            time_since_adjustment = (context.now - context.last_setpoint_adjustment).total_seconds()
+            adjustment_interval = getattr(context, 'setpoint_adjustment_interval', 120)
+
+            if time_since_adjustment < adjustment_interval:
+                remaining = adjustment_interval - time_since_adjustment
+                _LOGGER.debug(
+                    "Too soon to adjust setpoint: %.0fs since last adjustment (need %ds)",
+                    time_since_adjustment,
+                    adjustment_interval,
+                )
+                return current_setpoint, f"Wait {remaining:.0f}s before next adjustment"
+
+        # Need to adjust setpoint
+        setpoint_step = getattr(context, 'setpoint_step', 1.0)
+        outdoor_temp = context.sensor_snapshot.outdoor_temperature.value
+
+        # Determine adjustment direction and magnitude
         if mode == HVACMode.COOL:
-            # Cooling: set AC colder than target
-            base_direction = -1
-        elif mode == HVACMode.HEAT:
-            # Heating: set AC warmer than target
-            base_direction = 1
-        else:
-            base_direction = 0
+            if temp_error > context.deadband:
+                # Too hot, need more cooling -> decrease setpoint
+                new_setpoint = current_setpoint_value - setpoint_step
+                reason = f"Too hot (+{temp_error:.1f}°C), decrease setpoint by {setpoint_step}°C"
 
-        # Check if we're overshooting (temperature going past target in wrong direction)
-        # For COOL: overshooting if temp < target (too cold)
-        # For HEAT: overshooting if temp > target (too hot)
-        is_overshooting = False
-        if mode == HVACMode.COOL and temp_error < -context.deadband:
-            is_overshooting = True
-        elif mode == HVACMode.HEAT and temp_error > context.deadband:
-            is_overshooting = True
+                # Consider outdoor temperature
+                if outdoor_temp < target_temp.value - 2:
+                    # Outdoor is cool, house will naturally cool down
+                    # Be less aggressive
+                    new_setpoint = current_setpoint_value - (setpoint_step * 0.5)
+                    reason += " | Outdoor cool, reduced adjustment"
 
-        # Start with base offset, but reduce or invert if overshooting
-        if is_overshooting:
-            # Overshooting: move setpoint closer to or past target to reduce AC power
-            # The further past target we are, the more we reduce offset
-            overshoot_magnitude = abs(temp_error) - context.deadband
-
-            # Reduce base offset proportionally to overshoot
-            # If overshoot is small (0-1°C): reduce offset by 50-100%
-            # If overshoot is large (>1°C): invert offset completely
-            reduction_factor = min(1.0, overshoot_magnitude / 1.0)  # 0.0 to 1.0
-
-            if overshoot_magnitude > 1.0:
-                # Large overshoot: invert offset (set AC warmer when cooling, colder when heating)
-                total_offset = -context.base_offset * base_direction * reduction_factor
-                _LOGGER.debug(
-                    "Large overshoot (%.1f°C past target), inverting offset: %.1f",
-                    overshoot_magnitude, total_offset
-                )
             else:
-                # Small overshoot: reduce offset
-                total_offset = context.base_offset * base_direction * (1.0 - reduction_factor)
-                _LOGGER.debug(
-                    "Small overshoot (%.1f°C past target), reducing offset: %.1f",
-                    overshoot_magnitude, total_offset
-                )
-        else:
-            # Normal operation: use full base offset
-            total_offset = context.base_offset * base_direction
+                # Too cold or overshooting, reduce cooling -> increase setpoint
+                new_setpoint = current_setpoint_value + setpoint_step
+                reason = f"Overshooting ({temp_error:.1f}°C), increase setpoint by {setpoint_step}°C"
 
-        # Add dynamic offset based on error magnitude
-        # Larger error -> larger offset (more aggressive)
-        error_based_offset = 0.0
-        if abs(temp_error) > context.deadband:
-            # Error outside deadband - add proportional offset
-            error_magnitude = abs(temp_error) - context.deadband
-            error_based_offset = min(error_magnitude * 0.5, context.max_dynamic_offset)
-            error_based_offset *= base_direction
+        else:  # mode == HVACMode.HEAT
+            if temp_error < -context.deadband:
+                # Too cold, need more heating -> increase setpoint
+                new_setpoint = current_setpoint_value + setpoint_step
+                reason = f"Too cold ({temp_error:.1f}°C), increase setpoint by {setpoint_step}°C"
 
-        # Add rate-based offset if rate is available
-        rate_based_offset = 0.0
-        if temp_rate is not None:
-            # If temperature is changing in undesired direction, increase offset
-            if mode == HVACMode.COOL and temp_rate > 0:
-                # Room warming while cooling - increase cooling power
-                rate_based_offset = -min(
-                    abs(temp_rate) * context.dynamic_rate_factor,
-                    context.max_dynamic_offset
-                )
-            elif mode == HVACMode.HEAT and temp_rate < 0:
-                # Room cooling while heating - increase heating power
-                rate_based_offset = min(
-                    abs(temp_rate) * context.dynamic_rate_factor,
-                    context.max_dynamic_offset
-                )
+                # Consider outdoor temperature
+                if outdoor_temp > target_temp.value + 2:
+                    # Outdoor is warm, house will naturally warm up
+                    # Be less aggressive
+                    new_setpoint = current_setpoint_value + (setpoint_step * 0.5)
+                    reason += " | Outdoor warm, reduced adjustment"
 
-        # Combine offsets
-        total_offset += error_based_offset + rate_based_offset
-
-        # Calculate final setpoint
-        raw_setpoint = target_temp.value + total_offset
+            else:
+                # Too hot or overshooting, reduce heating -> decrease setpoint
+                new_setpoint = current_setpoint_value - setpoint_step
+                reason = f"Overshooting (+{temp_error:.1f}°C), decrease setpoint by {setpoint_step}°C"
 
         # Clamp to device capabilities
         clamped_setpoint = max(
             context.device_capabilities.min_setpoint.value,
-            min(raw_setpoint, context.device_capabilities.max_setpoint.value)
+            min(new_setpoint, context.device_capabilities.max_setpoint.value)
         )
+
+        if new_setpoint != clamped_setpoint:
+            reason += f" | Clamped to device limits"
 
         setpoint = Temperature(clamped_setpoint)
 
-        # Build reason string
-        if is_overshooting:
-            overshoot_mag = abs(temp_error) - context.deadband
-            reason_parts = [f"OVERSHOOT={overshoot_mag:.1f}°C"]
-            reason_parts.append(f"base_reduced={total_offset:.1f}")
-        else:
-            reason_parts = [f"base={context.base_offset * base_direction:.1f}"]
-
-        if error_based_offset != 0:
-            reason_parts.append(f"error={error_based_offset:.1f}")
-        if rate_based_offset != 0:
-            reason_parts.append(f"rate={rate_based_offset:.1f}")
-
-        if not is_overshooting:
-            reason_parts.append(f"total={total_offset:.1f}")
-
-        if raw_setpoint != clamped_setpoint:
-            reason_parts.append("clamped")
-
-        reason = f"Setpoint calculation: {', '.join(reason_parts)}"
-
-        _LOGGER.debug(
-            "Setpoint for %s: target=%.1f, room=%.1f, error=%.1f, rate=%s, setpoint=%.1f",
+        _LOGGER.info(
+            "Setpoint adjustment: %s mode, room=%.1f°C, target=%.1f°C, error=%.1f°C, "
+            "current_setpoint=%.1f°C, new_setpoint=%.1f°C, rate=%s",
             mode.value,
-            target_temp.value,
             room_temp.value,
+            target_temp.value,
             temp_error,
-            f"{temp_rate:.2f}" if temp_rate is not None else "N/A",
+            current_setpoint_value,
             setpoint.value,
+            f"{temp_rate:.1f}°C/h" if temp_rate is not None else "N/A",
         )
 
         return setpoint, reason
+
+
+# Keep old class name for backward compatibility during migration
+DynamicSetpointAdjustmentPolicy = IterativeSetpointAdjustmentPolicy

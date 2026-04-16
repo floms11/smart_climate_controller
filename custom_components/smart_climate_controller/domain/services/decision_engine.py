@@ -129,7 +129,36 @@ class ClimateDecisionEngine:
 
         reason = " | ".join(reason_parts)
 
-        # Step 7: Determine if command should be sent
+        # Step 7: Anti-flapping checks
+        # Check if we can turn off (respect min_run_time)
+        if desired_mode == HVACMode.OFF and current_mode in (HVACMode.HEAT, HVACMode.COOL):
+            can_turn_off, run_time_reason = self._can_turn_off(context)
+            if not can_turn_off:
+                # Keep current mode running
+                return ControlDecision(
+                    decision_type=DecisionType.NO_ACTION,
+                    desired_mode=current_mode,
+                    desired_setpoint=context.device_state.current_setpoint,
+                    reason=f"Want to turn off but: {run_time_reason}",
+                    should_send_command=False,
+                    timestamp=context.now,
+                )
+
+        # Check if we can turn on (respect min_idle_time)
+        if desired_mode in (HVACMode.HEAT, HVACMode.COOL) and current_mode == HVACMode.OFF:
+            can_turn_on, idle_time_reason = self._can_turn_on(context)
+            if not can_turn_on:
+                # Stay off
+                return ControlDecision(
+                    decision_type=DecisionType.NO_ACTION,
+                    desired_mode=HVACMode.OFF,
+                    desired_setpoint=None,
+                    reason=f"Want to turn on but: {idle_time_reason}",
+                    should_send_command=False,
+                    timestamp=context.now,
+                )
+
+        # Step 8: Determine if command should be sent
         should_send = self._should_send_command(
             context,
             desired_mode,
@@ -157,6 +186,40 @@ class ClimateDecisionEngine:
         )
 
         return decision
+
+    def _can_turn_off(self, context: ControlContext) -> tuple[bool, str]:
+        """
+        Check if AC can be turned off (respecting min_run_time).
+
+        Returns:
+            Tuple of (can_turn_off, reason)
+        """
+        if context.last_run_start is None:
+            return True, "No run time restriction"
+
+        elapsed = (context.now - context.last_run_start).total_seconds()
+        if elapsed < context.min_run_time:
+            remaining = context.min_run_time - elapsed
+            return False, f"Min run time not met, {remaining:.0f}s remaining"
+
+        return True, "Min run time satisfied"
+
+    def _can_turn_on(self, context: ControlContext) -> tuple[bool, str]:
+        """
+        Check if AC can be turned on (respecting min_idle_time).
+
+        Returns:
+            Tuple of (can_turn_on, reason)
+        """
+        if context.last_idle_start is None:
+            return True, "No idle time restriction"
+
+        elapsed = (context.now - context.last_idle_start).total_seconds()
+        if elapsed < context.min_idle_time:
+            remaining = context.min_idle_time - elapsed
+            return False, f"Min idle time not met, {remaining:.0f}s remaining"
+
+        return True, "Min idle time satisfied"
 
     def _setpoint_changed(
         self,

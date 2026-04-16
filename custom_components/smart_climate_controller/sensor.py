@@ -33,6 +33,8 @@ async def async_setup_entry(
         ControlDecisionSensor(coordinator, entry),
         ActualDeviceModeSensor(coordinator, entry),
         DesiredHVACModeSensor(coordinator, entry),
+        ShortTermRateSensor(coordinator, entry),
+        LongTermRateSensor(coordinator, entry),
     ]
 
     async_add_entities(entities)
@@ -297,3 +299,121 @@ class DesiredHVACModeSensor(SmartClimateSensorBase):
             attrs["reason"] = decision.reason
 
         return attrs
+
+
+class ShortTermRateSensor(SmartClimateSensorBase):
+    """Sensor showing short-term temperature change rate (1 minute)."""
+
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_native_unit_of_measurement = "°C/h"
+
+    def __init__(self, coordinator: SmartClimateCoordinator, entry: ConfigEntry) -> None:
+        """Initialize the short-term rate sensor."""
+        super().__init__(coordinator, entry, "short_term_rate", "Temperature Rate (1 min)")
+
+    @property
+    def native_value(self) -> Optional[float]:
+        """Return the state of the sensor."""
+        if self.coordinator.data is None:
+            return None
+
+        rate = self.coordinator.data.get("short_term_rate")
+        if rate is not None:
+            return round(rate, 2)
+
+        return None
+
+    @property
+    def icon(self) -> str:
+        """Return the icon based on rate direction."""
+        value = self.native_value
+        if value is None:
+            return "mdi:thermometer"
+        elif value > 0.5:
+            return "mdi:thermometer-chevron-up"
+        elif value < -0.5:
+            return "mdi:thermometer-chevron-down"
+        else:
+            return "mdi:thermometer-lines"
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return additional attributes."""
+        if self.coordinator.data is None:
+            return {}
+
+        value = self.native_value
+        if value is None:
+            return {"description": "No data yet"}
+
+        # Interpret the rate
+        if abs(value) < 0.3:
+            interpretation = "Stable"
+        elif value > 0:
+            interpretation = "Rising"
+        else:
+            interpretation = "Falling"
+
+        return {
+            "interpretation": interpretation,
+            "window": "1 minute",
+        }
+
+
+class LongTermRateSensor(SmartClimateSensorBase):
+    """Sensor showing long-term temperature change rate (10 minutes)."""
+
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_native_unit_of_measurement = "°C/h"
+
+    def __init__(self, coordinator: SmartClimateCoordinator, entry: ConfigEntry) -> None:
+        """Initialize the long-term rate sensor."""
+        super().__init__(coordinator, entry, "long_term_rate", "Temperature Rate (10 min)")
+
+    @property
+    def native_value(self) -> Optional[float]:
+        """Return the state of the sensor."""
+        if self.coordinator.data is None:
+            return None
+
+        rate = self.coordinator.data.get("long_term_rate")
+        if rate is not None:
+            return round(rate, 2)
+
+        return None
+
+    @property
+    def icon(self) -> str:
+        """Return the icon based on rate direction."""
+        value = self.native_value
+        if value is None:
+            return "mdi:thermometer"
+        elif value > 0.5:
+            return "mdi:thermometer-chevron-up"
+        elif value < -0.5:
+            return "mdi:thermometer-chevron-down"
+        else:
+            return "mdi:thermometer-lines"
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return additional attributes."""
+        if self.coordinator.data is None:
+            return {}
+
+        value = self.native_value
+        if value is None:
+            return {"description": "No data yet"}
+
+        # Interpret the rate
+        if abs(value) < 0.3:
+            interpretation = "Stable"
+        elif value > 0:
+            interpretation = "Rising"
+        else:
+            interpretation = "Falling"
+
+        return {
+            "interpretation": interpretation,
+            "window": "10 minutes",
+        }

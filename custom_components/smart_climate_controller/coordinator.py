@@ -1,7 +1,7 @@
 """Data coordinator for Smart Climate Controller."""
 import asyncio
 import logging
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Optional
 
 from homeassistant.core import HomeAssistant
@@ -10,9 +10,11 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 from .const import DOMAIN
 from .infrastructure.ha_state import HAStateReader
 from .infrastructure.ha_commands import HACommandSender
+from .infrastructure.temperature_tracker import TemperatureTracker
 from .application.controller import ClimateController
 from .application.commands import SetClimateCommand
 from .multi_split_coordinator import get_multi_split_coordinator
+from .domain.value_objects import DecisionType
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -44,10 +46,18 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
         # Initialize application controller
         self.controller = ClimateController()
 
+        # Temperature tracking for dynamics
+        self.temp_tracker = TemperatureTracker()
+
         # Controller state
         self.controller_enabled = True
         self.manual_mode_override = None  # None = AUTO, or "heat"/"cool" for manual mode
         self._last_known_device_mode = None  # Track last known device mode
+
+        # Anti-flapping state
+        self.last_run_start: Optional[datetime] = None  # When AC turned on (OFF -> HEAT/COOL)
+        self.last_idle_start: Optional[datetime] = None  # When AC turned off (HEAT/COOL -> OFF)
+        self.last_setpoint_adjustment: Optional[datetime] = None  # Last time setpoint was adjusted
 
         # Multi-split support
         self.multi_split_coordinator = get_multi_split_coordinator(hass)
@@ -82,8 +92,29 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
                 _LOGGER.warning("Climate entity unavailable")
                 return self._get_safe_data()
 
-            # Update last known device mode
+            # Get current timestamp
+            now = datetime.now()
+
+            # Track temperature for dynamics calculation
+            self.temp_tracker.add_measurement(room_temp, now)
+            short_term_rate = self.temp_tracker.get_short_term_rate(now)
+            long_term_rate = self.temp_tracker.get_long_term_rate(now)
+
+            # Update last known device mode and anti-flapping timestamps
             device_mode = climate_state["hvac_mode"]
+
+            # Update anti-flapping state on mode transitions
+            if device_mode in ("heat", "cool") and self._last_known_device_mode == "off":
+                # AC just turned on
+                self.last_run_start = now
+                self.last_idle_start = None
+                _LOGGER.debug("AC turned on at %s", now.isoformat())
+            elif device_mode == "off" and self._last_known_device_mode in ("heat", "cool"):
+                # AC just turned off
+                self.last_idle_start = now
+                self.last_run_start = None
+                _LOGGER.debug("AC turned off at %s", now.isoformat())
+
             self._last_known_device_mode = device_mode
 
             # Get multi-split shared mode if applicable
@@ -94,10 +125,12 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
                 )
 
             _LOGGER.debug(
-                "Control cycle starting: manual_mode=%s, controller_enabled=%s, device_mode=%s",
+                "Control cycle: manual=%s, enabled=%s, mode=%s, short_rate=%.2f°C/h, long_rate=%.2f°C/h",
                 self.manual_mode_override,
                 self.controller_enabled,
-                climate_state["hvac_mode"],
+                device_mode,
+                short_term_rate if short_term_rate is not None else 0.0,
+                long_term_rate if long_term_rate is not None else 0.0,
             )
 
             # Execute control cycle
@@ -117,20 +150,32 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
                 min_room_temp=self.config["min_room_temp"],
                 max_room_temp=self.config["max_room_temp"],
                 deadband=self.config["deadband"],
-                base_offset=self.config["base_offset"],
-                dynamic_rate_factor=self.config["dynamic_rate_factor"],
-                max_dynamic_offset=self.config["max_dynamic_offset"],
                 outdoor_heat_threshold=self.config["outdoor_heat_threshold"],
                 outdoor_cool_threshold=self.config["outdoor_cool_threshold"],
                 mode_switch_hysteresis=self.config["mode_switch_hysteresis"],
                 min_mode_switch_interval=self.config["min_mode_switch_interval"],
                 min_command_interval=self.config["min_command_interval"],
                 controller_enabled=self.controller_enabled,
+                # New parameters
+                short_term_rate=short_term_rate,
+                long_term_rate=long_term_rate,
+                last_run_start=self.last_run_start,
+                last_idle_start=self.last_idle_start,
+                min_run_time=self.config.get("min_run_time", 300),
+                min_idle_time=self.config.get("min_idle_time", 180),
+                last_setpoint_adjustment=self.last_setpoint_adjustment,
+                setpoint_adjustment_interval=self.config.get("setpoint_adjustment_interval", 120),
+                setpoint_step=self.config.get("setpoint_step", 1.0),
                 # Multi-split support
                 multi_split_group_shared_mode=multi_split_shared_mode.value if multi_split_shared_mode else None,
                 # Manual mode override
                 manual_mode_override=self.manual_mode_override,
             )
+
+            # Update last_setpoint_adjustment if setpoint was changed
+            if command is not None and decision.decision_type in (DecisionType.SET_SETPOINT, DecisionType.SET_MODE_AND_SETPOINT):
+                self.last_setpoint_adjustment = now
+                _LOGGER.debug("Setpoint adjusted at %s", now.isoformat())
 
             # Send command if needed
             if command is not None:
@@ -172,6 +217,8 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
                 "outdoor_temp": outdoor_temp,
                 "device_mode": climate_state["hvac_mode"],
                 "device_setpoint": climate_state["target_temperature"],
+                "short_term_rate": short_term_rate,
+                "long_term_rate": long_term_rate,
                 "controller_diagnostics": self.controller.get_diagnostics(),
                 "multi_split_info": multi_split_info,
             }

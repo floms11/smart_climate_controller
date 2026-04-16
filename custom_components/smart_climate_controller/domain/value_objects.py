@@ -130,9 +130,6 @@ class ControlContext:
 
     # Control parameters
     deadband: float
-    base_offset: float
-    dynamic_rate_factor: float
-    max_dynamic_offset: float
 
     # Mode selection parameters
     outdoor_heat_threshold: float
@@ -147,6 +144,23 @@ class ControlContext:
 
     # Current time
     now: datetime
+
+    # Temperature dynamics
+    short_term_rate: Optional[float] = None  # °C/hour over 1 minute
+    long_term_rate: Optional[float] = None   # °C/hour over 10 minutes
+
+    # Anti-flapping timestamps
+    last_run_start: Optional[datetime] = None  # When AC turned on (OFF -> HEAT/COOL)
+    last_idle_start: Optional[datetime] = None  # When AC turned off (HEAT/COOL -> OFF)
+
+    # Anti-flapping constraints
+    min_run_time: int = 300  # seconds - minimum time AC must run before turning off
+    min_idle_time: int = 180  # seconds - minimum time AC must stay off before turning on
+
+    # Iterative setpoint adjustment
+    last_setpoint_adjustment: Optional[datetime] = None
+    setpoint_adjustment_interval: int = 120  # seconds - wait between setpoint adjustments
+    setpoint_step: float = 1.0  # degrees - step size for setpoint adjustment
 
     # Controller state
     controller_enabled: bool = True

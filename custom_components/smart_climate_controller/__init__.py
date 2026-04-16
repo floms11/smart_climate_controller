@@ -21,12 +21,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Migrate old entries to include missing default values
     from .const import (
         DEFAULT_DEADBAND, DEFAULT_MIN_ROOM_TEMP, DEFAULT_MAX_ROOM_TEMP,
-        DEFAULT_MIN_AC_SETPOINT, DEFAULT_MAX_AC_SETPOINT, DEFAULT_BASE_OFFSET,
-        DEFAULT_DYNAMIC_RATE_FACTOR, DEFAULT_MAX_DYNAMIC_OFFSET,
+        DEFAULT_MIN_AC_SETPOINT, DEFAULT_MAX_AC_SETPOINT,
         DEFAULT_OUTDOOR_HEAT_THRESHOLD, DEFAULT_OUTDOOR_COOL_THRESHOLD,
         DEFAULT_MODE_SWITCH_HYSTERESIS, DEFAULT_MIN_COMMAND_INTERVAL,
         DEFAULT_MIN_MODE_SWITCH_INTERVAL, DEFAULT_CONTROL_INTERVAL,
         DEFAULT_ENABLE_DEBUG_SENSORS,
+        DEFAULT_MIN_RUN_TIME, DEFAULT_MIN_IDLE_TIME,
+        DEFAULT_SETPOINT_ADJUSTMENT_INTERVAL, DEFAULT_SETPOINT_STEP,
     )
 
     updated_data = dict(entry.data)
@@ -39,9 +40,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         "max_room_temp": DEFAULT_MAX_ROOM_TEMP,
         "min_ac_setpoint": DEFAULT_MIN_AC_SETPOINT,
         "max_ac_setpoint": DEFAULT_MAX_AC_SETPOINT,
-        "base_offset": DEFAULT_BASE_OFFSET,
-        "dynamic_rate_factor": DEFAULT_DYNAMIC_RATE_FACTOR,
-        "max_dynamic_offset": DEFAULT_MAX_DYNAMIC_OFFSET,
         "outdoor_heat_threshold": DEFAULT_OUTDOOR_HEAT_THRESHOLD,
         "outdoor_cool_threshold": DEFAULT_OUTDOOR_COOL_THRESHOLD,
         "mode_switch_hysteresis": DEFAULT_MODE_SWITCH_HYSTERESIS,
@@ -49,7 +47,19 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         "min_mode_switch_interval": DEFAULT_MIN_MODE_SWITCH_INTERVAL,
         "control_interval": DEFAULT_CONTROL_INTERVAL,
         "enable_debug_sensors": DEFAULT_ENABLE_DEBUG_SENSORS,
+        "min_run_time": DEFAULT_MIN_RUN_TIME,
+        "min_idle_time": DEFAULT_MIN_IDLE_TIME,
+        "setpoint_adjustment_interval": DEFAULT_SETPOINT_ADJUSTMENT_INTERVAL,
+        "setpoint_step": DEFAULT_SETPOINT_STEP,
     }
+
+    # Remove obsolete parameters from migrated configs
+    obsolete_keys = ["base_offset", "dynamic_rate_factor", "max_dynamic_offset"]
+    for key in obsolete_keys:
+        if key in updated_data:
+            del updated_data[key]
+            needs_update = True
+            _LOGGER.info("Removing obsolete config key '%s'", key)
 
     for key, default_value in defaults.items():
         if key not in updated_data:
