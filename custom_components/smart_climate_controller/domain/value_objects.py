@@ -150,6 +150,7 @@ class ControlContext:
 
     # Controller state
     controller_enabled: bool = True
+    manual_mode_override: Optional[str] = None  # None = AUTO, "heat"/"cool" = manual mode
 
 
 @dataclass(frozen=True)

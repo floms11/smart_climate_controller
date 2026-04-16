@@ -51,7 +51,8 @@ class SmartClimateEntity(CoordinatorEntity, ClimateEntity):
     _attr_supported_features = (
         ClimateEntityFeature.TARGET_TEMPERATURE | ClimateEntityFeature.TURN_OFF | ClimateEntityFeature.TURN_ON
     )
-    _attr_hvac_modes = [HVACMode.OFF, HVACMode.HEAT, HVACMode.COOL, HVACMode.AUTO]
+    # Support all modes: OFF, AUTO, and manual HEAT/COOL
+    _attr_hvac_modes = [HVACMode.OFF, HVACMode.AUTO, HVACMode.HEAT, HVACMode.COOL]
 
     def __init__(self, coordinator: SmartClimateCoordinator, entry: ConfigEntry) -> None:
         """Initialize the climate entity."""
@@ -77,39 +78,20 @@ class SmartClimateEntity(CoordinatorEntity, ClimateEntity):
 
     @property
     def hvac_mode(self) -> HVACMode:
-        """Return current HVAC mode."""
+        """Return current HVAC mode of the controller (not the physical device)."""
+        # This entity represents the CONTROLLER state, not the AC state
+        # OFF = controller disabled
+        # AUTO = controller active (automatically selects HEAT/COOL based on needs)
+        # HEAT/COOL = manual mode override
         if not self.coordinator.controller_enabled:
             return HVACMode.OFF
 
-        # Show the actual device mode when controller is active
-        if self.coordinator.data is None:
-            return HVACMode.AUTO
-
-        device_mode = self.coordinator.data.get("device_mode")
-        decision = self.coordinator.data.get("decision")
-
-        # If we have a decision, show desired mode (what we want to achieve)
-        if decision and decision.desired_mode:
-            desired_mode_str = decision.desired_mode.value
-            mode_map = {
-                "off": HVACMode.OFF,
-                "heat": HVACMode.HEAT,
-                "cool": HVACMode.COOL,
-                "auto": HVACMode.AUTO,
-            }
-            return mode_map.get(desired_mode_str, HVACMode.AUTO)
-
-        # Fallback to actual device mode
-        if device_mode:
-            mode_map = {
-                "off": HVACMode.AUTO,  # Show AUTO even if device is off (controller is active)
-                "heat": HVACMode.HEAT,
-                "cool": HVACMode.COOL,
-                "auto": HVACMode.AUTO,
-                "dry": HVACMode.AUTO,
-                "fan_only": HVACMode.AUTO,
-            }
-            return mode_map.get(device_mode, HVACMode.AUTO)
+        # Check if manual mode override is set
+        if self.coordinator.manual_mode_override:
+            if self.coordinator.manual_mode_override == "heat":
+                return HVACMode.HEAT
+            elif self.coordinator.manual_mode_override == "cool":
+                return HVACMode.COOL
 
         return HVACMode.AUTO
 
@@ -135,6 +117,8 @@ class SmartClimateEntity(CoordinatorEntity, ClimateEntity):
         attrs = {
             ATTR_CONTROL_ACTIVE: self.coordinator.controller_enabled,
             ATTR_OUTDOOR_TEMP: self.coordinator.data.get("outdoor_temp"),
+            "actual_device_mode": self.coordinator.data.get("device_mode"),  # Показуємо реальний режим AC
+            "actual_device_setpoint": self.coordinator.data.get("device_setpoint"),  # Реальна уставка AC
         }
 
         if decision:
@@ -170,10 +154,18 @@ class SmartClimateEntity(CoordinatorEntity, ClimateEntity):
         """Set HVAC mode."""
         if hvac_mode == HVACMode.OFF:
             self.coordinator.set_controller_enabled(False)
+            self.coordinator.set_manual_mode(None)
         elif hvac_mode == HVACMode.AUTO:
             self.coordinator.set_controller_enabled(True)
+            self.coordinator.set_manual_mode(None)  # Clear manual override
+        elif hvac_mode == HVACMode.HEAT:
+            self.coordinator.set_controller_enabled(True)
+            self.coordinator.set_manual_mode("heat")
+        elif hvac_mode == HVACMode.COOL:
+            self.coordinator.set_controller_enabled(True)
+            self.coordinator.set_manual_mode("cool")
         else:
-            _LOGGER.warning("Only AUTO and OFF modes supported, got: %s", hvac_mode)
+            _LOGGER.warning("Unsupported mode: %s", hvac_mode)
             return
 
         await self.coordinator.async_request_refresh()

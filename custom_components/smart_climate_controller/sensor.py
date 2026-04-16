@@ -31,6 +31,7 @@ async def async_setup_entry(
         OutdoorTemperatureSensor(coordinator, entry),
         DesiredSetpointSensor(coordinator, entry),
         ControlDecisionSensor(coordinator, entry),
+        ActualDeviceModeSensor(coordinator, entry),
     ]
 
     async_add_entities(entities)
@@ -134,4 +135,61 @@ class ControlDecisionSensor(SmartClimateSensorBase):
             "desired_setpoint": decision.desired_setpoint.value if decision.desired_setpoint else None,
             "should_send_command": decision.should_send_command,
             "command_sent": self.coordinator.data.get("command_sent", False),
+        }
+
+
+class ActualDeviceModeSensor(SmartClimateSensorBase):
+    """Sensor showing actual HVAC mode of the physical device."""
+
+    def __init__(self, coordinator: SmartClimateCoordinator, entry: ConfigEntry) -> None:
+        """Initialize the actual device mode sensor."""
+        super().__init__(coordinator, entry, "actual_device_mode", "Actual Device Mode")
+
+    @property
+    def native_value(self) -> Optional[str]:
+        """Return the state of the sensor."""
+        if self.coordinator.data is None:
+            return None
+
+        device_mode = self.coordinator.data.get("device_mode")
+        if device_mode:
+            # Make it more readable
+            mode_names = {
+                "off": "Off",
+                "heat": "Heating",
+                "cool": "Cooling",
+                "auto": "Auto",
+                "dry": "Dry",
+                "fan_only": "Fan Only",
+            }
+            return mode_names.get(device_mode, device_mode.title())
+
+        return None
+
+    @property
+    def icon(self) -> str:
+        """Return the icon."""
+        if self.coordinator.data is None:
+            return "mdi:air-conditioner"
+
+        device_mode = self.coordinator.data.get("device_mode")
+        icon_map = {
+            "off": "mdi:power-off",
+            "heat": "mdi:fire",
+            "cool": "mdi:snowflake",
+            "auto": "mdi:autorenew",
+            "dry": "mdi:water-percent",
+            "fan_only": "mdi:fan",
+        }
+        return icon_map.get(device_mode, "mdi:air-conditioner")
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return additional attributes."""
+        if self.coordinator.data is None:
+            return {}
+
+        return {
+            "device_setpoint": self.coordinator.data.get("device_setpoint"),
+            "controller_enabled": self.coordinator.controller_enabled,
         }

@@ -79,10 +79,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Added translations in `en.json` and new `uk.json` (Ukrainian)
 - Fixed empty string handling for `multi_split_group` configuration parameter
 - Config flow now properly displays and saves `multi_split_group` field
-- **UX**: Improved climate entity behavior
-  - Now shows actual HVAC mode (HEAT/COOL) instead of always showing AUTO
+- **UX**: Fixed climate entity mode behavior (BREAKING CHANGE - improves UX)
+  - Climate entity now correctly shows controller state (OFF/AUTO) not device state
+  - Added new sensor "Actual Device Mode" to show real AC mode (Off/Heating/Cooling)
   - Auto-enables controller when user changes target temperature
-  - Entity state now reflects controller's desired mode for better visibility
+  - Controller now properly overrides manual AC changes to maintain control
+  - Added attributes `actual_device_mode` and `actual_device_setpoint` to climate entity
 
 ### Technical Details
 - Backward compatible with 0.1.x single-zone configurations

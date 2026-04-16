@@ -34,6 +34,17 @@ class OutdoorAwareModeSelectionPolicy(ModeSelectionPolicy):
         if not context.controller_enabled:
             return HVACMode.OFF, "Controller disabled"
 
+        # Check for manual mode override (highest priority after controller enabled check)
+        if context.manual_mode_override:
+            if context.manual_mode_override == "heat":
+                if not context.device_capabilities.can_heat:
+                    return current_mode, "Manual HEAT mode requested but device cannot heat"
+                return HVACMode.HEAT, "Manual mode override: HEAT"
+            elif context.manual_mode_override == "cool":
+                if not context.device_capabilities.can_cool:
+                    return current_mode, "Manual COOL mode requested but device cannot cool"
+                return HVACMode.COOL, "Manual mode override: COOL"
+
         # Check mode switch timing lock
         if not self._can_switch_mode(context):
             time_remaining = (

@@ -102,6 +102,7 @@ class DomainMapper:
         last_mode_change: Optional[datetime],
         last_command_sent: Optional[datetime],
         controller_enabled: bool,
+        manual_mode_override: Optional[str] = None,
         now: Optional[datetime] = None,
     ) -> ControlContext:
         """Create control context from configuration and state."""
@@ -124,5 +125,6 @@ class DomainMapper:
             last_mode_change=last_mode_change,
             last_command_sent=last_command_sent,
             controller_enabled=controller_enabled,
+            manual_mode_override=manual_mode_override,
             now=now or datetime.now(),
         )

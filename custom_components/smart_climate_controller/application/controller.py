@@ -80,6 +80,8 @@ class ClimateController:
         controller_enabled: bool,
         # Multi-split support
         multi_split_group_shared_mode: Optional[str] = None,
+        # Manual mode override
+        manual_mode_override: Optional[str] = None,
         # Optional overrides
         now: Optional[datetime] = None,
     ) -> tuple[Optional[SetClimateCommand], ControlDecision]:
@@ -138,6 +140,7 @@ class ClimateController:
             last_mode_change=self.last_mode_change,
             last_command_sent=self.last_command_sent,
             controller_enabled=controller_enabled,
+            manual_mode_override=manual_mode_override,
             now=current_time,
         )
 

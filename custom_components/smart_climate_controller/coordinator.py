@@ -45,6 +45,7 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
 
         # Controller state
         self.controller_enabled = True
+        self.manual_mode_override = None  # None = AUTO, or "heat"/"cool" for manual mode
 
         # Multi-split support
         self.multi_split_coordinator = get_multi_split_coordinator(hass)
@@ -107,6 +108,8 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
                 controller_enabled=self.controller_enabled,
                 # Multi-split support
                 multi_split_group_shared_mode=multi_split_shared_mode.value if multi_split_shared_mode else None,
+                # Manual mode override
+                manual_mode_override=self.manual_mode_override,
             )
 
             # Send command if needed
@@ -165,6 +168,43 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
         """Enable or disable controller."""
         self.controller_enabled = enabled
         _LOGGER.info("Controller %s", "enabled" if enabled else "disabled")
+
+    def set_manual_mode(self, mode: Optional[str]) -> None:
+        """Set manual mode override (None for AUTO, 'heat' or 'cool' for manual)."""
+        self.manual_mode_override = mode
+        if mode:
+            _LOGGER.info("Manual mode override set to: %s", mode)
+            # If in multi-split group, sync mode to all zones
+            if self.multi_split_group_id:
+                self._sync_group_mode(mode)
+        else:
+            _LOGGER.info("Manual mode override cleared (AUTO mode)")
+
+    def _sync_group_mode(self, mode: str) -> None:
+        """Sync manual mode to all zones in multi-split group."""
+        if not self.multi_split_group_id:
+            return
+
+        group = self.multi_split_coordinator.get_group_for_zone(self.entry_id)
+        if not group:
+            return
+
+        _LOGGER.info(
+            "Syncing mode %s to all zones in group %s",
+            mode,
+            group.group_name,
+        )
+
+        # Set manual mode for all other zones in the group
+        for zone_id in group.zone_ids:
+            if zone_id == self.entry_id:
+                continue  # Skip self
+
+            # Get coordinator for this zone
+            if zone_id in self.hass.data[DOMAIN]:
+                other_coordinator = self.hass.data[DOMAIN][zone_id]
+                other_coordinator.manual_mode_override = mode
+                _LOGGER.debug("Set manual mode %s for zone %s", mode, zone_id)
 
     async def async_force_update(self) -> None:
         """Force immediate control cycle."""
