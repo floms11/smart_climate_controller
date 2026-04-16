@@ -28,9 +28,6 @@ from .const import (
     CONF_MAX_ROOM_TEMP,
     CONF_MIN_AC_SETPOINT,
     CONF_MAX_AC_SETPOINT,
-    CONF_BASE_OFFSET,
-    CONF_DYNAMIC_RATE_FACTOR,
-    CONF_MAX_DYNAMIC_OFFSET,
     CONF_OUTDOOR_HEAT_THRESHOLD,
     CONF_OUTDOOR_COOL_THRESHOLD,
     CONF_MODE_SWITCH_HYSTERESIS,
@@ -39,6 +36,10 @@ from .const import (
     CONF_CONTROL_INTERVAL,
     CONF_ENABLE_DEBUG_SENSORS,
     CONF_MULTI_SPLIT_GROUP,
+    CONF_MIN_RUN_TIME,
+    CONF_MIN_IDLE_TIME,
+    CONF_SETPOINT_ADJUSTMENT_INTERVAL,
+    CONF_SETPOINT_STEP,
     DEFAULT_ZONE_NAME,
     DEFAULT_TARGET_TEMP,
     DEFAULT_DEADBAND,
@@ -46,9 +47,6 @@ from .const import (
     DEFAULT_MAX_ROOM_TEMP,
     DEFAULT_MIN_AC_SETPOINT,
     DEFAULT_MAX_AC_SETPOINT,
-    DEFAULT_BASE_OFFSET,
-    DEFAULT_DYNAMIC_RATE_FACTOR,
-    DEFAULT_MAX_DYNAMIC_OFFSET,
     DEFAULT_OUTDOOR_HEAT_THRESHOLD,
     DEFAULT_OUTDOOR_COOL_THRESHOLD,
     DEFAULT_MODE_SWITCH_HYSTERESIS,
@@ -56,6 +54,10 @@ from .const import (
     DEFAULT_MIN_MODE_SWITCH_INTERVAL,
     DEFAULT_CONTROL_INTERVAL,
     DEFAULT_ENABLE_DEBUG_SENSORS,
+    DEFAULT_MIN_RUN_TIME,
+    DEFAULT_MIN_IDLE_TIME,
+    DEFAULT_SETPOINT_ADJUSTMENT_INTERVAL,
+    DEFAULT_SETPOINT_STEP,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -90,9 +92,6 @@ class SmartClimateControllerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN)
                 user_input.setdefault(CONF_MAX_ROOM_TEMP, DEFAULT_MAX_ROOM_TEMP)
                 user_input.setdefault(CONF_MIN_AC_SETPOINT, DEFAULT_MIN_AC_SETPOINT)
                 user_input.setdefault(CONF_MAX_AC_SETPOINT, DEFAULT_MAX_AC_SETPOINT)
-                user_input.setdefault(CONF_BASE_OFFSET, DEFAULT_BASE_OFFSET)
-                user_input.setdefault(CONF_DYNAMIC_RATE_FACTOR, DEFAULT_DYNAMIC_RATE_FACTOR)
-                user_input.setdefault(CONF_MAX_DYNAMIC_OFFSET, DEFAULT_MAX_DYNAMIC_OFFSET)
                 user_input.setdefault(CONF_OUTDOOR_HEAT_THRESHOLD, DEFAULT_OUTDOOR_HEAT_THRESHOLD)
                 user_input.setdefault(CONF_OUTDOOR_COOL_THRESHOLD, DEFAULT_OUTDOOR_COOL_THRESHOLD)
                 user_input.setdefault(CONF_MODE_SWITCH_HYSTERESIS, DEFAULT_MODE_SWITCH_HYSTERESIS)
@@ -100,6 +99,10 @@ class SmartClimateControllerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN)
                 user_input.setdefault(CONF_MIN_MODE_SWITCH_INTERVAL, DEFAULT_MIN_MODE_SWITCH_INTERVAL)
                 user_input.setdefault(CONF_CONTROL_INTERVAL, DEFAULT_CONTROL_INTERVAL)
                 user_input.setdefault(CONF_ENABLE_DEBUG_SENSORS, DEFAULT_ENABLE_DEBUG_SENSORS)
+                user_input.setdefault(CONF_MIN_RUN_TIME, DEFAULT_MIN_RUN_TIME)
+                user_input.setdefault(CONF_MIN_IDLE_TIME, DEFAULT_MIN_IDLE_TIME)
+                user_input.setdefault(CONF_SETPOINT_ADJUSTMENT_INTERVAL, DEFAULT_SETPOINT_ADJUSTMENT_INTERVAL)
+                user_input.setdefault(CONF_SETPOINT_STEP, DEFAULT_SETPOINT_STEP)
 
                 return self.async_create_entry(
                     title=user_input[CONF_ZONE_NAME],
@@ -190,12 +193,6 @@ class SmartClimateControllerOptionsFlow(config_entries.OptionsFlow):
                 NumberSelectorConfig(min=20, max=40, step=0.5, mode=NumberSelectorMode.BOX, unit_of_measurement="°C")
             ),
             vol.Required(
-                CONF_BASE_OFFSET,
-                default=data.get(CONF_BASE_OFFSET, DEFAULT_BASE_OFFSET)
-            ): NumberSelector(
-                NumberSelectorConfig(min=0.0, max=10, step=0.5, mode=NumberSelectorMode.BOX, unit_of_measurement="°C")
-            ),
-            vol.Required(
                 CONF_OUTDOOR_HEAT_THRESHOLD,
                 default=data.get(CONF_OUTDOOR_HEAT_THRESHOLD, DEFAULT_OUTDOOR_HEAT_THRESHOLD)
             ): NumberSelector(
@@ -224,6 +221,30 @@ class SmartClimateControllerOptionsFlow(config_entries.OptionsFlow):
                 default=data.get(CONF_CONTROL_INTERVAL, DEFAULT_CONTROL_INTERVAL)
             ): NumberSelector(
                 NumberSelectorConfig(min=30, max=300, step=10, mode=NumberSelectorMode.BOX, unit_of_measurement="s")
+            ),
+            vol.Required(
+                CONF_MIN_RUN_TIME,
+                default=data.get(CONF_MIN_RUN_TIME, DEFAULT_MIN_RUN_TIME)
+            ): NumberSelector(
+                NumberSelectorConfig(min=60, max=1800, step=30, mode=NumberSelectorMode.BOX, unit_of_measurement="s")
+            ),
+            vol.Required(
+                CONF_MIN_IDLE_TIME,
+                default=data.get(CONF_MIN_IDLE_TIME, DEFAULT_MIN_IDLE_TIME)
+            ): NumberSelector(
+                NumberSelectorConfig(min=60, max=1800, step=30, mode=NumberSelectorMode.BOX, unit_of_measurement="s")
+            ),
+            vol.Required(
+                CONF_SETPOINT_ADJUSTMENT_INTERVAL,
+                default=data.get(CONF_SETPOINT_ADJUSTMENT_INTERVAL, DEFAULT_SETPOINT_ADJUSTMENT_INTERVAL)
+            ): NumberSelector(
+                NumberSelectorConfig(min=60, max=600, step=30, mode=NumberSelectorMode.BOX, unit_of_measurement="s")
+            ),
+            vol.Required(
+                CONF_SETPOINT_STEP,
+                default=data.get(CONF_SETPOINT_STEP, DEFAULT_SETPOINT_STEP)
+            ): NumberSelector(
+                NumberSelectorConfig(min=0.5, max=3.0, step=0.5, mode=NumberSelectorMode.BOX, unit_of_measurement="°C")
             ),
             })
 
