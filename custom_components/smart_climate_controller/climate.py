@@ -20,7 +20,8 @@ from .const import (
     ATTR_LAST_DECISION_REASON,
     ATTR_LAST_CONTROL_TIME,
     ATTR_LAST_MODE_CHANGE,
-    ATTR_ROOM_TEMP_RATE,
+    ATTR_SHORT_TERM_RATE,
+    ATTR_LONG_TERM_RATE,
     ATTR_OUTDOOR_TEMP,
     ATTR_DESIRED_MODE,
     ATTR_DESIRED_SETPOINT,
@@ -133,7 +134,10 @@ class SmartClimateEntity(CoordinatorEntity, ClimateEntity):
         if diagnostics:
             last_decision = diagnostics.get("last_decision", {})
             attrs[ATTR_LAST_MODE_CHANGE] = diagnostics.get("last_mode_change")
-            attrs[ATTR_ROOM_TEMP_RATE] = None  # Could extract from history
+
+        # Add temperature dynamics
+        attrs[ATTR_SHORT_TERM_RATE] = self.coordinator.data.get("short_term_rate")
+        attrs[ATTR_LONG_TERM_RATE] = self.coordinator.data.get("long_term_rate")
 
         return attrs
 
