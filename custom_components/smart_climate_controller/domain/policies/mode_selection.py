@@ -63,8 +63,14 @@ class OutdoorAwareModeSelectionPolicy(ModeSelectionPolicy):
             outdoor_forbids_heating = outdoor_temp.value > (
                 context.outdoor_cool_threshold + context.mode_switch_hysteresis
             )
+            outdoor_forbids_cooling = outdoor_temp.value < (
+                context.outdoor_heat_threshold - context.mode_switch_hysteresis
+            )
         elif current_mode == HVACMode.COOL:
             # When cooling, use lower threshold - hysteresis for switching away
+            outdoor_forbids_heating = outdoor_temp.value > (
+                context.outdoor_cool_threshold + context.mode_switch_hysteresis
+            )
             outdoor_forbids_cooling = outdoor_temp.value < (
                 context.outdoor_heat_threshold - context.mode_switch_hysteresis
             )
