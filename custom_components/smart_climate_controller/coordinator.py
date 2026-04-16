@@ -397,11 +397,11 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
                     room_name, target_temp, minor_correction, ac_target_temp
                 )
             else:
-                # Within acceptable range - turn off AC (no need to heat)
-                should_turn_off = True
+                # Within acceptable range - set target temp
+                ac_target_temp = target_temp
                 _LOGGER.info(
-                    "Room %s: 🟢 HEAT mode - within acceptable range (diff %.1f) - TURNING OFF (no heating needed)",
-                    room_name, temp_diff
+                    "Room %s: HEAT mode - within range (diff %.1f), set target %.1f",
+                    room_name, temp_diff, ac_target_temp
                 )
 
         elif physical_mode == HVACMode.COOL:
@@ -428,11 +428,11 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
                     room_name, target_temp, minor_correction, ac_target_temp
                 )
             else:
-                # Within acceptable range - turn off AC (no need to cool)
-                should_turn_off = True
+                # Within acceptable range - set target temp
+                ac_target_temp = target_temp
                 _LOGGER.info(
-                    "Room %s: 🟢 COOL mode - within acceptable range (diff %.1f) - TURNING OFF (no cooling needed)",
-                    room_name, temp_diff
+                    "Room %s: COOL mode - within range (diff %.1f), set target %.1f",
+                    room_name, temp_diff, ac_target_temp
                 )
 
         # Ensure temperature is within AC limits
