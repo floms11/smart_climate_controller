@@ -417,13 +417,22 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
                     "Room %s: HEAT mode - major correction: %.1f + %.1f = %.1f",
                     room_name, target_temp, major_correction, ac_target_temp
                 )
-            elif temp_diff < -minor_hysteresis:
-                # Room needs heating (colder than -0.5°C) - minor correction
-                ac_target_temp = min(target_temp + minor_correction, AC_MAX_TEMP)
-                _LOGGER.info(
-                    "Room %s: HEAT mode - minor correction: %.1f + %.1f = %.1f",
-                    room_name, target_temp, minor_correction, ac_target_temp
-                )
+            elif temp_diff < -minor_hysteresis or temp_diff > minor_hysteresis:
+                # Room is beyond ±0.5°C range - major correction
+                if temp_diff < -minor_hysteresis:
+                    # Cold side: add major correction
+                    ac_target_temp = min(target_temp + major_correction, AC_MAX_TEMP)
+                    _LOGGER.info(
+                        "Room %s: HEAT mode - major correction cold side: %.1f + %.1f = %.1f",
+                        room_name, target_temp, major_correction, ac_target_temp
+                    )
+                else:
+                    # Warm side: subtract major correction
+                    ac_target_temp = max(target_temp - major_correction, AC_MIN_TEMP)
+                    _LOGGER.info(
+                        "Room %s: HEAT mode - major correction warm side: %.1f - %.1f = %.1f",
+                        room_name, target_temp, major_correction, ac_target_temp
+                    )
             else:
                 # Within acceptable range (-0.5°C to +1°C)
                 if mode_changed:
@@ -446,31 +455,45 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
                         CONF_USE_LINEAR_CORRECTION, DEFAULT_USE_LINEAR_CORRECTION
                     )
                     if use_linear:
-                        # Linear correction: interpolate from 0 to minor_correction_value
-                        # temp_diff range: -minor_hysteresis to 0 to +major_threshold
-                        # For HEAT: when temp_diff is negative (cold), add correction proportionally
-                        if temp_diff < 0:
-                            # Room is colder than target: linearly increase correction
-                            # At 0°C diff: no correction
-                            # At -0.5°C diff: full minor_correction
-                            ratio = abs(temp_diff) / minor_hysteresis  # 0.0 to 1.0
-                            correction = ratio * minor_correction
-                            ac_target_temp = min(target_temp + correction, AC_MAX_TEMP)
-                            _LOGGER.info(
-                                "Room %s: HEAT mode - linear correction (diff %.1f, ratio %.2f): %.1f + %.1f = %.1f",
-                                room_name, temp_diff, ratio, target_temp, correction, ac_target_temp
-                            )
+                        # Linear correction works only in ±minor_hysteresis range (±0.5°C)
+                        # Beyond that, use major correction
+                        if temp_diff < -minor_hysteresis or temp_diff > minor_hysteresis:
+                            # Beyond ±0.5°C range - use major correction
+                            if temp_diff < -minor_hysteresis:
+                                # Cold side: beyond -0.5°C
+                                ac_target_temp = min(target_temp + major_correction, AC_MAX_TEMP)
+                                _LOGGER.info(
+                                    "Room %s: HEAT mode - beyond linear range (diff %.1f < -%.1f): %.1f + %.1f = %.1f",
+                                    room_name, temp_diff, minor_hysteresis, target_temp, major_correction, ac_target_temp
+                                )
+                            else:
+                                # Warm side: beyond +0.5°C
+                                ac_target_temp = max(target_temp - major_correction, AC_MIN_TEMP)
+                                _LOGGER.info(
+                                    "Room %s: HEAT mode - beyond linear range (diff %.1f > +%.1f): %.1f - %.1f = %.1f",
+                                    room_name, temp_diff, minor_hysteresis, target_temp, major_correction, ac_target_temp
+                                )
                         else:
-                            # Room is warmer than target but within range: reduce correction
+                            # Within ±0.5°C range - linear correction
                             # At 0°C diff: no correction
-                            # At +1.0°C diff: would turn off (handled above)
-                            ratio = temp_diff / major_threshold  # 0.0 to 1.0
-                            correction = -(ratio * minor_correction)  # Negative correction
-                            ac_target_temp = max(target_temp + correction, AC_MIN_TEMP)
-                            _LOGGER.info(
-                                "Room %s: HEAT mode - linear correction warm side (diff %.1f, ratio %.2f): %.1f + %.1f = %.1f",
-                                room_name, temp_diff, ratio, target_temp, correction, ac_target_temp
-                            )
+                            # At ±0.5°C diff: full minor_correction
+                            ratio = abs(temp_diff) / minor_hysteresis  # 0.0 to 1.0
+                            if temp_diff < 0:
+                                # Cold side: add correction
+                                correction = ratio * minor_correction
+                                ac_target_temp = min(target_temp + correction, AC_MAX_TEMP)
+                                _LOGGER.info(
+                                    "Room %s: HEAT mode - linear correction cold (diff %.1f, ratio %.2f): %.1f + %.1f = %.1f",
+                                    room_name, temp_diff, ratio, target_temp, correction, ac_target_temp
+                                )
+                            else:
+                                # Warm side: subtract correction
+                                correction = ratio * minor_correction
+                                ac_target_temp = max(target_temp - correction, AC_MIN_TEMP)
+                                _LOGGER.info(
+                                    "Room %s: HEAT mode - linear correction warm (diff %.1f, ratio %.2f): %.1f - %.1f = %.1f",
+                                    room_name, temp_diff, ratio, target_temp, correction, ac_target_temp
+                                )
                     else:
                         # No linear correction - maintain target temperature
                         ac_target_temp = target_temp
@@ -495,13 +518,22 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
                     "Room %s: COOL mode - major correction: %.1f - %.1f = %.1f",
                     room_name, target_temp, major_correction, ac_target_temp
                 )
-            elif temp_diff > minor_hysteresis:
-                # Room needs cooling (warmer than +0.5°C) - minor correction
-                ac_target_temp = max(target_temp - minor_correction, AC_MIN_TEMP)
-                _LOGGER.info(
-                    "Room %s: COOL mode - minor correction: %.1f - %.1f = %.1f",
-                    room_name, target_temp, minor_correction, ac_target_temp
-                )
+            elif temp_diff < -minor_hysteresis or temp_diff > minor_hysteresis:
+                # Room is beyond ±0.5°C range - major correction
+                if temp_diff > minor_hysteresis:
+                    # Hot side: subtract major correction
+                    ac_target_temp = max(target_temp - major_correction, AC_MIN_TEMP)
+                    _LOGGER.info(
+                        "Room %s: COOL mode - major correction hot side: %.1f - %.1f = %.1f",
+                        room_name, target_temp, major_correction, ac_target_temp
+                    )
+                else:
+                    # Cold side: add major correction
+                    ac_target_temp = min(target_temp + major_correction, AC_MAX_TEMP)
+                    _LOGGER.info(
+                        "Room %s: COOL mode - major correction cold side: %.1f + %.1f = %.1f",
+                        room_name, target_temp, major_correction, ac_target_temp
+                    )
             else:
                 # Within acceptable range (-1°C to +0.5°C)
                 if mode_changed:
@@ -524,30 +556,45 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
                         CONF_USE_LINEAR_CORRECTION, DEFAULT_USE_LINEAR_CORRECTION
                     )
                     if use_linear:
-                        # Linear correction: interpolate from 0 to minor_correction_value
-                        # For COOL: when temp_diff is positive (hot), subtract correction proportionally
-                        if temp_diff > 0:
-                            # Room is hotter than target: linearly increase cooling correction
-                            # At 0°C diff: no correction
-                            # At +0.5°C diff: full minor_correction
-                            ratio = temp_diff / minor_hysteresis  # 0.0 to 1.0
-                            correction = ratio * minor_correction
-                            ac_target_temp = max(target_temp - correction, AC_MIN_TEMP)
-                            _LOGGER.info(
-                                "Room %s: COOL mode - linear correction (diff %.1f, ratio %.2f): %.1f - %.1f = %.1f",
-                                room_name, temp_diff, ratio, target_temp, correction, ac_target_temp
-                            )
+                        # Linear correction works only in ±minor_hysteresis range (±0.5°C)
+                        # Beyond that, use major correction
+                        if temp_diff < -minor_hysteresis or temp_diff > minor_hysteresis:
+                            # Beyond ±0.5°C range - use major correction
+                            if temp_diff < -minor_hysteresis:
+                                # Cold side: beyond -0.5°C
+                                ac_target_temp = min(target_temp + major_correction, AC_MAX_TEMP)
+                                _LOGGER.info(
+                                    "Room %s: COOL mode - beyond linear range (diff %.1f < -%.1f): %.1f + %.1f = %.1f",
+                                    room_name, temp_diff, minor_hysteresis, target_temp, major_correction, ac_target_temp
+                                )
+                            else:
+                                # Hot side: beyond +0.5°C
+                                ac_target_temp = max(target_temp - major_correction, AC_MIN_TEMP)
+                                _LOGGER.info(
+                                    "Room %s: COOL mode - beyond linear range (diff %.1f > +%.1f): %.1f - %.1f = %.1f",
+                                    room_name, temp_diff, minor_hysteresis, target_temp, major_correction, ac_target_temp
+                                )
                         else:
-                            # Room is colder than target but within range: reduce cooling
+                            # Within ±0.5°C range - linear correction
                             # At 0°C diff: no correction
-                            # At -1.0°C diff: would turn off (handled above)
-                            ratio = abs(temp_diff) / major_threshold  # 0.0 to 1.0
-                            correction = ratio * minor_correction  # Positive correction (warm up)
-                            ac_target_temp = min(target_temp + correction, AC_MAX_TEMP)
-                            _LOGGER.info(
-                                "Room %s: COOL mode - linear correction cold side (diff %.1f, ratio %.2f): %.1f + %.1f = %.1f",
-                                room_name, temp_diff, ratio, target_temp, correction, ac_target_temp
-                            )
+                            # At ±0.5°C diff: full minor_correction
+                            ratio = abs(temp_diff) / minor_hysteresis  # 0.0 to 1.0
+                            if temp_diff > 0:
+                                # Hot side: subtract correction
+                                correction = ratio * minor_correction
+                                ac_target_temp = max(target_temp - correction, AC_MIN_TEMP)
+                                _LOGGER.info(
+                                    "Room %s: COOL mode - linear correction hot (diff %.1f, ratio %.2f): %.1f - %.1f = %.1f",
+                                    room_name, temp_diff, ratio, target_temp, correction, ac_target_temp
+                                )
+                            else:
+                                # Cold side: add correction
+                                correction = ratio * minor_correction
+                                ac_target_temp = min(target_temp + correction, AC_MAX_TEMP)
+                                _LOGGER.info(
+                                    "Room %s: COOL mode - linear correction cold (diff %.1f, ratio %.2f): %.1f + %.1f = %.1f",
+                                    room_name, temp_diff, ratio, target_temp, correction, ac_target_temp
+                                )
                     else:
                         # No linear correction - maintain target temperature
                         ac_target_temp = target_temp
