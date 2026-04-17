@@ -1178,19 +1178,45 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
         room_state.saved_temperature = None
         room_state.saved_hvac_mode = None
 
+        # Get restored mode for synchronization
+        restored_hvac_mode = room_state.hvac_mode
+
+        # Synchronize all other thermostats to the restored mode
+        _LOGGER.info(
+            "Thermostat %s: boost ended, synchronizing all thermostats to mode %s",
+            room_name, restored_hvac_mode
+        )
+
+        for other_room_name, other_room_state in self._room_states.items():
+            if other_room_name == room_name:
+                continue
+
+            if other_room_state.hvac_mode == HVACMode.OFF:
+                # Don't change OFF thermostats
+                continue
+
+            if other_room_state.hvac_mode != restored_hvac_mode:
+                old_mode = other_room_state.hvac_mode
+                other_room_state.hvac_mode = restored_hvac_mode
+                other_room_state.last_mode_switch = dt_util.utcnow()
+                _LOGGER.info(
+                    "Thermostat %s: mode changed from %s to %s (syncing after boost ended)",
+                    other_room_name, old_mode, restored_hvac_mode
+                )
+
         # Save state
         await self._save_state()
 
         # Notify listeners
         self.async_set_updated_data({})
 
-        # Trigger processing to apply changes to physical ACs
+        # Trigger processing to apply changes to physical ACs with force_sync
         try:
             ac_names = list(self._room_states.keys())
             if ac_names:
-                await self._process_group("multi_split", ac_names)
+                await self._process_group("multi_split", ac_names, force_sync=True)
         except Exception as err:
-            _LOGGER.error("Error processing ACs after temperature change: %s", err)
+            _LOGGER.error("Error processing ACs after boost restoration: %s", err)
 
     def get_room_state(self, room_name: str) -> RoomState | None:
         """Get room state."""
