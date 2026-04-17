@@ -12,7 +12,16 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import CONF_AC_NAME, CONF_AC_UNITS, CONF_ROOM_NAME, CONF_ROOMS, DOMAIN
+from .const import (
+    CONF_AC_NAME,
+    CONF_AC_UNITS,
+    CONF_ROOM_NAME,
+    CONF_ROOMS,
+    DOMAIN,
+    PRESET_BOOST_COOL,
+    PRESET_BOOST_HEAT,
+    PRESET_COMFORT,
+)
 from .coordinator import SmartClimateCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -47,13 +56,18 @@ class SmartClimateThermostat(CoordinatorEntity, ClimateEntity):
     _attr_has_entity_name = True
     _attr_temperature_unit = UnitOfTemperature.CELSIUS
     _attr_supported_features = (
-        ClimateEntityFeature.TARGET_TEMPERATURE
+        ClimateEntityFeature.TARGET_TEMPERATURE | ClimateEntityFeature.PRESET_MODE
     )
     _attr_hvac_modes = [
         HVACMode.OFF,
         HVACMode.HEAT,
         HVACMode.COOL,
         HVACMode.AUTO,
+    ]
+    _attr_preset_modes = [
+        PRESET_COMFORT,
+        PRESET_BOOST_HEAT,
+        PRESET_BOOST_COOL,
     ]
     _attr_min_temp = 16.0
     _attr_max_temp = 30.0
@@ -103,9 +117,21 @@ class SmartClimateThermostat(CoordinatorEntity, ClimateEntity):
         indoor_sensor = room_config[CONF_INDOOR_TEMP_SENSOR]
         return self.coordinator._get_sensor_temperature(indoor_sensor)
 
+    @property
+    def preset_mode(self) -> str:
+        """Return current preset mode."""
+        room_state = self.coordinator.get_room_state(self._room_name)
+        if room_state and hasattr(room_state, 'preset_mode'):
+            return room_state.preset_mode
+        return PRESET_COMFORT
+
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
         """Set HVAC mode."""
         await self.coordinator.set_room_hvac_mode(self._room_name, hvac_mode)
+
+    async def async_set_preset_mode(self, preset_mode: str) -> None:
+        """Set preset mode."""
+        await self.coordinator.set_room_preset_mode(self._room_name, preset_mode)
 
     async def async_set_temperature(self, **kwargs) -> None:
         """Set target temperature."""

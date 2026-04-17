@@ -14,6 +14,8 @@ from homeassistant.util import dt as dt_util
 from .const import (
     CONF_AC_NAME,
     CONF_AC_UNITS,
+    CONF_BOOST_DURATION,
+    CONF_BOOST_TEMP_OFFSET,
     CONF_CLIMATE_ENTITY,
     CONF_INDOOR_TEMP_SENSOR,
     CONF_MAJOR_CORRECTION_VALUE,
@@ -29,6 +31,8 @@ from .const import (
     CONF_ROOM_NAME,
     CONF_ROOMS,
     CONF_USE_LINEAR_CORRECTION,
+    DEFAULT_BOOST_DURATION,
+    DEFAULT_BOOST_TEMP_OFFSET,
     DEFAULT_MAJOR_CORRECTION_VALUE,
     DEFAULT_MAJOR_DEVIATION_THRESHOLD,
     DEFAULT_MIN_MODE_SWITCH_INTERVAL,
@@ -39,6 +43,9 @@ from .const import (
     DEFAULT_OUTDOOR_TEMP_COOL_ONLY,
     DEFAULT_OUTDOOR_TEMP_HEAT_ONLY,
     DEFAULT_USE_LINEAR_CORRECTION,
+    PRESET_BOOST_COOL,
+    PRESET_BOOST_HEAT,
+    PRESET_COMFORT,
     STORAGE_KEY,
     STORAGE_VERSION,
 )
@@ -59,6 +66,10 @@ class RoomState:
         self.last_mode_switch: datetime | None = None
         self.last_power_switch: datetime | None = None
         self.last_physical_mode: HVACMode | None = None  # Track last physical mode (heat/cool)
+        self.preset_mode: str = "comfort"  # Default preset
+        self.boost_end_time: datetime | None = None  # When boost mode should end
+        self.saved_temperature: float | None = None  # Temperature before boost
+        self.saved_hvac_mode: HVACMode | None = None  # HVAC mode before boost
 
 
 class SmartClimateCoordinator(DataUpdateCoordinator):
@@ -98,6 +109,16 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
     async def _async_update_data(self):
         """Update data via library."""
         try:
+            # Check for expired boost modes
+            now = dt_util.utcnow()
+            for room_name, room_state in self._room_states.items():
+                if room_state.boost_end_time and now >= room_state.boost_end_time:
+                    _LOGGER.info(
+                        "Thermostat %s: boost mode expired, restoring previous state",
+                        room_name
+                    )
+                    await self._restore_from_boost(room_name)
+
             # Get all AC units (rooms) - they're all in one synchronized group
             ac_names = list(self._room_states.keys())
 
@@ -228,7 +249,19 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
         if group_hvac_mode == HVACMode.COOL:
             return HVACMode.COOL
 
-        # group_hvac_mode is AUTO - need to determine physical mode
+        # group_hvac_mode is AUTO - check if any room is in boost mode
+        # Boost mode forces a specific physical mode until boost ends
+        for room_name in room_names:
+            room_state = self._room_states.get(room_name)
+            if room_state and room_state.preset_mode in (PRESET_BOOST_HEAT, PRESET_BOOST_COOL):
+                forced_mode = room_state.last_physical_mode
+                _LOGGER.info(
+                    "Group %s: boost mode active in %s (preset=%s), forcing physical mode to %s",
+                    group_name, room_name, room_state.preset_mode, forced_mode
+                )
+                return forced_mode
+
+        # No boost mode active - need to determine physical mode normally
         # Get outdoor temperature (use first room's sensor)
         outdoor_temp = None
         for room_name in room_names:
@@ -890,6 +923,143 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
         await self._save_state()
 
         # Notify all listeners that data has changed (updates UI)
+        self.async_set_updated_data({})
+
+    async def set_room_preset_mode(self, room_name: str, preset_mode: str):
+        """Set preset mode for a room's thermostat."""
+        room_state = self._room_states.get(room_name)
+        if not room_state:
+            _LOGGER.warning("Room state not found for %s", room_name)
+            return
+
+        old_preset = room_state.preset_mode
+        _LOGGER.info(
+            "Thermostat %s: preset mode changing from %s to %s",
+            room_name, old_preset, preset_mode
+        )
+
+        # Handle preset mode changes
+        if preset_mode == PRESET_COMFORT:
+            # Restore from boost if needed
+            if old_preset in (PRESET_BOOST_HEAT, PRESET_BOOST_COOL):
+                _LOGGER.info("Thermostat %s: manually restoring from boost mode", room_name)
+                await self._restore_from_boost(room_name)
+            else:
+                room_state.preset_mode = PRESET_COMFORT
+
+        elif preset_mode == PRESET_BOOST_HEAT:
+            # Save current state before boost
+            room_state.saved_temperature = room_state.target_temperature
+            room_state.saved_hvac_mode = room_state.hvac_mode
+            room_state.preset_mode = PRESET_BOOST_HEAT
+
+            # Get current indoor temperature
+            room_config = self._get_room_config(room_name)
+            if room_config:
+                indoor_temp = self._get_sensor_temperature(room_config[CONF_INDOOR_TEMP_SENSOR])
+                if indoor_temp is not None:
+                    # Set boost temperature
+                    boost_offset = self._get_global_option(CONF_BOOST_TEMP_OFFSET, DEFAULT_BOOST_TEMP_OFFSET)
+                    boost_temp = indoor_temp + boost_offset
+                    room_state.target_temperature = max(16.0, min(30.0, boost_temp))
+
+                    _LOGGER.info(
+                        "Thermostat %s: BOOST HEAT - indoor=%.1f, offset=%.1f, new_target=%.1f",
+                        room_name, indoor_temp, boost_offset, room_state.target_temperature
+                    )
+
+            # Keep thermostat in AUTO mode, but force physical mode to HEAT
+            # This allows other thermostats to adapt while maintaining AUTO flexibility
+            if room_state.hvac_mode != HVACMode.AUTO:
+                room_state.hvac_mode = HVACMode.AUTO
+
+            # Force physical mode to HEAT and reset mode switch timer
+            room_state.last_mode_switch = dt_util.utcnow()  # Reset timer to allow immediate mode change
+            room_state.last_physical_mode = HVACMode.HEAT
+
+            # Set boost end time
+            boost_duration = self._get_global_option(CONF_BOOST_DURATION, DEFAULT_BOOST_DURATION)
+            room_state.boost_end_time = dt_util.utcnow() + timedelta(seconds=boost_duration)
+
+            _LOGGER.info(
+                "Thermostat %s: boost will end at %s (in %d seconds, staying in AUTO with forced HEAT)",
+                room_name, room_state.boost_end_time, boost_duration
+            )
+
+        elif preset_mode == PRESET_BOOST_COOL:
+            # Save current state before boost
+            room_state.saved_temperature = room_state.target_temperature
+            room_state.saved_hvac_mode = room_state.hvac_mode
+            room_state.preset_mode = PRESET_BOOST_COOL
+
+            # Get current indoor temperature
+            room_config = self._get_room_config(room_name)
+            if room_config:
+                indoor_temp = self._get_sensor_temperature(room_config[CONF_INDOOR_TEMP_SENSOR])
+                if indoor_temp is not None:
+                    # Set boost temperature
+                    boost_offset = self._get_global_option(CONF_BOOST_TEMP_OFFSET, DEFAULT_BOOST_TEMP_OFFSET)
+                    boost_temp = indoor_temp - boost_offset
+                    room_state.target_temperature = max(16.0, min(30.0, boost_temp))
+
+                    _LOGGER.info(
+                        "Thermostat %s: BOOST COOL - indoor=%.1f, offset=%.1f, new_target=%.1f",
+                        room_name, indoor_temp, boost_offset, room_state.target_temperature
+                    )
+
+            # Keep thermostat in AUTO mode, but force physical mode to COOL
+            # This allows other thermostats to adapt while maintaining AUTO flexibility
+            if room_state.hvac_mode != HVACMode.AUTO:
+                room_state.hvac_mode = HVACMode.AUTO
+
+            # Force physical mode to COOL and reset mode switch timer
+            room_state.last_mode_switch = dt_util.utcnow()  # Reset timer to allow immediate mode change
+            room_state.last_physical_mode = HVACMode.COOL
+
+            # Set boost end time
+            boost_duration = self._get_global_option(CONF_BOOST_DURATION, DEFAULT_BOOST_DURATION)
+            room_state.boost_end_time = dt_util.utcnow() + timedelta(seconds=boost_duration)
+
+            _LOGGER.info(
+                "Thermostat %s: boost will end at %s (in %d seconds, staying in AUTO with forced COOL)",
+                room_name, room_state.boost_end_time, boost_duration
+            )
+
+        # Save state immediately
+        await self._save_state()
+
+        # Trigger immediate update to apply boost mode
+        await self.async_request_refresh()
+
+    async def _restore_from_boost(self, room_name: str):
+        """Restore room state after boost mode ends."""
+        room_state = self._room_states.get(room_name)
+        if not room_state:
+            return
+
+        _LOGGER.info(
+            "Thermostat %s: restoring from boost - saved_temp=%.1f, saved_mode=%s",
+            room_name,
+            room_state.saved_temperature if room_state.saved_temperature else 0,
+            room_state.saved_hvac_mode
+        )
+
+        # Restore saved state
+        if room_state.saved_temperature is not None:
+            room_state.target_temperature = room_state.saved_temperature
+        if room_state.saved_hvac_mode is not None:
+            room_state.hvac_mode = room_state.saved_hvac_mode
+
+        # Clear boost state
+        room_state.preset_mode = PRESET_COMFORT
+        room_state.boost_end_time = None
+        room_state.saved_temperature = None
+        room_state.saved_hvac_mode = None
+
+        # Save state
+        await self._save_state()
+
+        # Notify listeners
         self.async_set_updated_data({})
 
         # Trigger processing to apply changes to physical ACs

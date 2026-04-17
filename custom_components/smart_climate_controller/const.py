@@ -25,6 +25,8 @@ CONF_MODE_SWITCH_TEMP_THRESHOLD = "mode_switch_temp_threshold"
 CONF_USE_LINEAR_CORRECTION = "use_linear_correction"
 CONF_MIN_MODE_SWITCH_INTERVAL = "min_mode_switch_interval"
 CONF_MIN_POWER_SWITCH_INTERVAL = "min_power_switch_interval"
+CONF_BOOST_TEMP_OFFSET = "boost_temp_offset"
+CONF_BOOST_DURATION = "boost_duration"
 
 # Defaults
 DEFAULT_OUTDOOR_TEMP_HEAT_ONLY = 10.0
@@ -35,8 +37,15 @@ DEFAULT_MAJOR_CORRECTION_VALUE = 10.0
 DEFAULT_MAJOR_DEVIATION_THRESHOLD = 1.0
 DEFAULT_MODE_SWITCH_TEMP_THRESHOLD = 1.5
 DEFAULT_USE_LINEAR_CORRECTION = False
-DEFAULT_MIN_MODE_SWITCH_INTERVAL = 1800  # 10 minutes in seconds
+DEFAULT_MIN_MODE_SWITCH_INTERVAL = 1800  # 30 minutes in seconds
 DEFAULT_MIN_POWER_SWITCH_INTERVAL = 60  # 1 minute in seconds
+DEFAULT_BOOST_TEMP_OFFSET = 5.0  # Temperature offset for boost modes
+DEFAULT_BOOST_DURATION = 300  # 5 minutes in seconds
+
+# Preset modes
+PRESET_COMFORT = "comfort"
+PRESET_BOOST_HEAT = "boost_heat"
+PRESET_BOOST_COOL = "boost_cool"
 
 # Storage
 STORAGE_KEY = f"{DOMAIN}.storage"

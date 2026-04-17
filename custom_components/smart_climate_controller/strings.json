@@ -37,7 +37,9 @@
           "mode_switch_temp_threshold": "Mode switch temperature threshold",
           "use_linear_correction": "Use linear temperature correction",
           "min_mode_switch_interval": "Min mode switch interval (seconds)",
-          "min_power_switch_interval": "Min power switch interval (seconds)"
+          "min_power_switch_interval": "Min power switch interval (seconds)",
+          "boost_temp_offset": "Boost temperature offset",
+          "boost_duration": "Boost duration (seconds)"
         }
       }
     },
@@ -70,12 +72,29 @@
           "mode_switch_temp_threshold": "Mode switch temperature threshold",
           "use_linear_correction": "Use linear temperature correction",
           "min_mode_switch_interval": "Min mode switch interval (seconds)",
-          "min_power_switch_interval": "Min power switch interval (seconds)"
+          "min_power_switch_interval": "Min power switch interval (seconds)",
+          "boost_temp_offset": "Boost temperature offset",
+          "boost_duration": "Boost duration (seconds)"
         }
       }
     },
     "abort": {
       "ac_units_require_reconfiguration": "To change AC units, please remove and re-add the integration"
+    }
+  },
+  "entity": {
+    "climate": {
+      "smart_climate_controller": {
+        "state_attributes": {
+          "preset_mode": {
+            "state": {
+              "comfort": "Comfort",
+              "boost_heat": "Boost Heat",
+              "boost_cool": "Boost Cool"
+            }
+          }
+        }
+      }
     }
   }
 }

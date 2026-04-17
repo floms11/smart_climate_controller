@@ -12,6 +12,8 @@ from homeassistant.helpers import selector
 from .const import (
     CONF_AC_NAME,
     CONF_AC_UNITS,
+    CONF_BOOST_DURATION,
+    CONF_BOOST_TEMP_OFFSET,
     CONF_CLIMATE_ENTITY,
     CONF_INDOOR_TEMP_SENSOR,
     CONF_MAJOR_CORRECTION_VALUE,
@@ -25,6 +27,8 @@ from .const import (
     CONF_OUTDOOR_TEMP_HEAT_ONLY,
     CONF_OUTDOOR_TEMP_SENSOR,
     CONF_USE_LINEAR_CORRECTION,
+    DEFAULT_BOOST_DURATION,
+    DEFAULT_BOOST_TEMP_OFFSET,
     DEFAULT_MAJOR_CORRECTION_VALUE,
     DEFAULT_MAJOR_DEVIATION_THRESHOLD,
     DEFAULT_MIN_MODE_SWITCH_INTERVAL,
@@ -207,6 +211,22 @@ class SmartClimateControllerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN)
                         min=60, max=1800, step=60, unit_of_measurement="s"
                     )
                 ),
+                vol.Required(
+                    CONF_BOOST_TEMP_OFFSET,
+                    default=DEFAULT_BOOST_TEMP_OFFSET,
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=1.0, max=10.0, step=0.5, unit_of_measurement="°C"
+                    )
+                ),
+                vol.Required(
+                    CONF_BOOST_DURATION,
+                    default=DEFAULT_BOOST_DURATION,
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=60, max=1800, step=60, unit_of_measurement="s"
+                    )
+                ),
             }
         )
 
@@ -346,6 +366,26 @@ class SmartClimateControllerOptionsFlow(config_entries.OptionsFlow):
                     CONF_MIN_POWER_SWITCH_INTERVAL,
                     default=options.get(
                         CONF_MIN_POWER_SWITCH_INTERVAL, DEFAULT_MIN_POWER_SWITCH_INTERVAL
+                    ),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=60, max=1800, step=60, unit_of_measurement="s"
+                    )
+                ),
+                vol.Required(
+                    CONF_BOOST_TEMP_OFFSET,
+                    default=options.get(
+                        CONF_BOOST_TEMP_OFFSET, DEFAULT_BOOST_TEMP_OFFSET
+                    ),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=1.0, max=10.0, step=0.5, unit_of_measurement="°C"
+                    )
+                ),
+                vol.Required(
+                    CONF_BOOST_DURATION,
+                    default=options.get(
+                        CONF_BOOST_DURATION, DEFAULT_BOOST_DURATION
                     ),
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(
