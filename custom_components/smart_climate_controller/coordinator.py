@@ -417,14 +417,11 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
         # Analyze room needs first - only count significant deviations
         heat_need_score = 0
         cool_need_score = 0
-        critical_deviation_found = False
 
         # Use mode switch temperature threshold for mode switching decisions
         mode_switch_threshold = self._get_global_option(
             CONF_MODE_SWITCH_TEMP_THRESHOLD, DEFAULT_MODE_SWITCH_TEMP_THRESHOLD
         )
-        # Critical deviation threshold: 2.25°C by default (mode_switch_threshold * 1.5)
-        critical_threshold = mode_switch_threshold * 1.5
 
         for room_name in room_names:
             room_state = self._room_states.get(room_name)
@@ -438,14 +435,6 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
                 continue
 
             temp_diff = indoor_temp - room_state.target_temperature
-
-            # Check for critical deviation that requires immediate mode switch
-            if abs(temp_diff) > critical_threshold:
-                critical_deviation_found = True
-                _LOGGER.info(
-                    "Room %s: CRITICAL deviation %.1f°C (threshold %.1f) - will bypass mode switch interval",
-                    room_name, temp_diff, critical_threshold
-                )
 
             # Weight deviations by magnitude - larger deviations have more influence
             # Score = abs(deviation) * 10 (e.g., 5°C deviation = 50 points, 1.6°C = 16 points)
@@ -466,30 +455,15 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
                 )
 
         # Check if we should respect mode switch interval (use GROUP's last physical mode switch)
-        # If there's a critical deviation or opposite mode is needed, bypass the interval
-        should_bypass_interval = False
+        # Always respect the interval - no bypass
         if self._last_group_physical_mode_switch and current_physical_mode:
             time_since_switch = (dt_util.utcnow() - self._last_group_physical_mode_switch).total_seconds()
             if time_since_switch < min_interval:
-                # Check if we need opposite mode (HEAT when in COOL, or COOL when in HEAT)
-                need_opposite_mode = (
-                    (current_physical_mode == HVACMode.HEAT and cool_need_score > heat_need_score) or
-                    (current_physical_mode == HVACMode.COOL and heat_need_score > cool_need_score)
+                _LOGGER.info(
+                    "Group %s: keeping mode %s (switched %.0f sec ago, min %d sec) - interval must be respected",
+                    group_name, current_physical_mode, time_since_switch, min_interval
                 )
-
-                if critical_deviation_found or need_opposite_mode:
-                    should_bypass_interval = True
-                    _LOGGER.info(
-                        "Group %s: BYPASSING mode switch interval (%.0f sec < %d sec) due to %s",
-                        group_name, time_since_switch, min_interval,
-                        "critical deviation" if critical_deviation_found else "opposite mode needed"
-                    )
-                else:
-                    _LOGGER.debug(
-                        "Group %s: keeping mode %s (switched %.0f sec ago, min %d sec)",
-                        group_name, current_physical_mode, time_since_switch, min_interval
-                    )
-                    return current_physical_mode
+                return current_physical_mode
 
         # Decide based on scores with hysteresis threshold
         score_threshold = self._get_global_option(
@@ -499,8 +473,8 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
 
         current_mode_str = str(current_physical_mode) if current_physical_mode else "None"
         _LOGGER.info(
-            "Group %s: transition zone decision - heat_score=%.1f, cool_score=%.1f, diff=%.1f, threshold=%.1f, current_mode=%s, bypass=%s",
-            group_name, heat_need_score, cool_need_score, score_diff, score_threshold, current_mode_str, should_bypass_interval
+            "Group %s: transition zone decision - heat_score=%.1f, cool_score=%.1f, diff=%.1f, threshold=%.1f, current_mode=%s",
+            group_name, heat_need_score, cool_need_score, score_diff, score_threshold, current_mode_str
         )
 
         # Apply hysteresis: switch mode only if score difference exceeds threshold
