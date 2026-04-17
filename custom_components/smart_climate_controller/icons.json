@@ -1,0 +1,19 @@
+{
+  "entity": {
+    "climate": {
+      "smart_climate_controller": {
+        "default": "mdi:thermostat",
+        "state_attributes": {
+          "preset_mode": {
+            "default": "mdi:home-thermometer-outline",
+            "state": {
+              "comfort": "mdi:home-thermometer-outline",
+              "boost_heat": "mdi:fire",
+              "boost_cool": "mdi:snowflake"
+            }
+          }
+        }
+      }
+    }
+  }
+}
