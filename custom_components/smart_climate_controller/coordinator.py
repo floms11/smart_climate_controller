@@ -142,29 +142,35 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
 
     def _get_room_config(self, room_name: str) -> dict[str, Any] | None:
         """Get room/AC configuration - supports both old and new formats."""
-        config = None
         # New format: CONF_AC_UNITS
         if CONF_AC_UNITS in self.entry.data:
             for ac_config in self.entry.data.get(CONF_AC_UNITS, []):
                 if ac_config[CONF_AC_NAME] == room_name:
-                    config = ac_config.copy()
-                    break
+                    return ac_config.copy()
         # Legacy format: CONF_ROOMS
         else:
             for room_config in self.entry.data.get(CONF_ROOMS, []):
                 if room_config[CONF_ROOM_NAME] == room_name:
-                    config = room_config.copy()
-                    break
+                    return room_config.copy()
 
-        # Override outdoor sensor from options if available
-        if config and CONF_OUTDOOR_TEMP_SENSOR in self.entry.options:
-            config[CONF_OUTDOOR_TEMP_SENSOR] = self.entry.options[CONF_OUTDOOR_TEMP_SENSOR]
-
-        return config
+        return None
 
     def _get_global_option(self, key: str, default: Any) -> Any:
         """Get global option value."""
         return self.entry.options.get(key, default)
+
+    def _get_outdoor_sensor(self) -> str | None:
+        """Get global outdoor temperature sensor entity ID.
+
+        Prioritizes options (editable), then falls back to config data.
+        """
+        # First try options (user can edit these)
+        outdoor_sensor = self.entry.options.get(CONF_OUTDOOR_TEMP_SENSOR)
+        if outdoor_sensor:
+            return outdoor_sensor
+
+        # Fallback to config data (from initial setup)
+        return self.entry.data.get(CONF_OUTDOOR_TEMP_SENSOR)
 
     async def _process_group(self, group_name: str, room_names: list[str], force_sync: bool = False):
         """Process a multi-split group.
@@ -323,19 +329,33 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
                 return forced_mode
 
         # No boost mode active - need to determine physical mode normally
-        # Get outdoor temperature (use first room's sensor)
+        # Get outdoor temperature from global sensor
+        outdoor_sensor = self._get_outdoor_sensor()
         outdoor_temp = None
-        for room_name in room_names:
-            room_config = self._get_room_config(room_name)
-            if room_config:
-                outdoor_temp = self._get_sensor_temperature(
-                    room_config[CONF_OUTDOOR_TEMP_SENSOR]
-                )
-                break
+        if outdoor_sensor:
+            outdoor_temp = self._get_sensor_temperature(outdoor_sensor)
+        else:
+            _LOGGER.warning("Group %s: no outdoor sensor configured", group_name)
 
         if outdoor_temp is None:
-            _LOGGER.warning("Cannot determine outdoor temperature for group %s", group_name)
-            return None
+            _LOGGER.warning(
+                "Group %s: outdoor temperature sensor unavailable, using fallback behavior",
+                group_name
+            )
+            # Fallback: keep last known group physical mode if available
+            if self._last_group_physical_mode:
+                _LOGGER.info(
+                    "Group %s: keeping last known physical mode %s (outdoor sensor unavailable)",
+                    group_name, self._last_group_physical_mode
+                )
+                return self._last_group_physical_mode
+
+            # If no previous mode, analyze room needs without outdoor context
+            _LOGGER.info(
+                "Group %s: no previous mode, analyzing room needs (outdoor sensor unavailable)",
+                group_name
+            )
+            return await self._determine_mode_without_outdoor(group_name, room_names)
 
         heat_only_threshold = self._get_global_option(
             CONF_OUTDOOR_TEMP_HEAT_ONLY, DEFAULT_OUTDOOR_TEMP_HEAT_ONLY
@@ -425,19 +445,22 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
                     room_name, temp_diff, critical_threshold
                 )
 
-            # Only count deviations greater than mode_switch_threshold to minimize mode switching
+            # Weight deviations by magnitude - larger deviations have more influence
+            # Score = abs(deviation) * 10 (e.g., 5°C deviation = 50 points, 1.6°C = 16 points)
             if temp_diff < -mode_switch_threshold:
-                heat_need_score += 10  # Need heating
+                weight = abs(temp_diff) * 10
+                heat_need_score += weight  # Need heating
                 _LOGGER.debug(
-                    "Room %s: temp %.1f < target %.1f by %.1f (threshold %.1f) - adding heat_need",
-                    room_name, indoor_temp, room_state.target_temperature, temp_diff, mode_switch_threshold
+                    "Room %s: temp %.1f < target %.1f by %.1f (threshold %.1f) - adding heat_need weight %.1f",
+                    room_name, indoor_temp, room_state.target_temperature, temp_diff, mode_switch_threshold, weight
                 )
 
             if temp_diff > mode_switch_threshold:
-                cool_need_score += 10  # Need cooling
+                weight = abs(temp_diff) * 10
+                cool_need_score += weight  # Need cooling
                 _LOGGER.debug(
-                    "Room %s: temp %.1f > target %.1f by %.1f (threshold %.1f) - adding cool_need",
-                    room_name, indoor_temp, room_state.target_temperature, temp_diff, mode_switch_threshold
+                    "Room %s: temp %.1f > target %.1f by %.1f (threshold %.1f) - adding cool_need weight %.1f",
+                    room_name, indoor_temp, room_state.target_temperature, temp_diff, mode_switch_threshold, weight
                 )
 
         # Check if we should respect mode switch interval (use GROUP's last physical mode switch)
@@ -469,15 +492,15 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
         # Decide based on scores
         current_mode_str = str(current_physical_mode) if current_physical_mode else "None"
         _LOGGER.info(
-            "Group %s: transition zone decision - heat_score=%d, cool_score=%d, current_mode=%s, threshold=%.1f, bypass=%s",
+            "Group %s: transition zone decision - heat_score=%.1f, cool_score=%.1f, current_mode=%s, threshold=%.1f, bypass=%s",
             group_name, heat_need_score, cool_need_score, current_mode_str, mode_switch_threshold, should_bypass_interval
         )
 
         if heat_need_score > cool_need_score:
-            _LOGGER.info("Group %s: choosing HEAT mode (heat_score %d > cool_score %d)", group_name, heat_need_score, cool_need_score)
+            _LOGGER.info("Group %s: choosing HEAT mode (heat_score %.1f > cool_score %.1f)", group_name, heat_need_score, cool_need_score)
             return HVACMode.HEAT
         elif cool_need_score > heat_need_score:
-            _LOGGER.info("Group %s: choosing COOL mode (cool_score %d > heat_score %d)", group_name, cool_need_score, heat_need_score)
+            _LOGGER.info("Group %s: choosing COOL mode (cool_score %.1f > heat_score %.1f)", group_name, cool_need_score, heat_need_score)
             return HVACMode.COOL
         elif current_physical_mode:
             # Equal needs - keep current mode
@@ -487,6 +510,100 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
             # No clear need and no current mode - default to cool in transition zone
             _LOGGER.info("Group %s: equal scores, no current mode, defaulting to COOL", group_name)
             return HVACMode.COOL
+
+    async def _determine_mode_without_outdoor(
+        self, group_name: str, room_names: list[str]
+    ) -> HVACMode | None:
+        """Determine mode when outdoor temperature sensor is unavailable.
+
+        Falls back to analyzing room needs without outdoor temperature context.
+        Similar to transition zone logic but without outdoor temperature constraints.
+        """
+        # Determine current physical mode from group's last physical mode
+        current_physical_mode = self._last_group_physical_mode
+
+        # If no group mode tracked yet, determine from rooms
+        if current_physical_mode is None:
+            for room_name in room_names:
+                room_state = self._room_states.get(room_name)
+                if not room_state:
+                    continue
+
+                # Try to get from last_physical_mode or actual AC state
+                if room_state.last_physical_mode in (HVACMode.HEAT, HVACMode.COOL):
+                    current_physical_mode = room_state.last_physical_mode
+                    break
+                else:
+                    # Fallback: get from actual AC state
+                    room_config = self._get_room_config(room_name)
+                    if room_config:
+                        climate_state = self.hass.states.get(room_config[CONF_CLIMATE_ENTITY])
+                        if climate_state and climate_state.state in (HVACMode.HEAT, HVACMode.COOL):
+                            current_physical_mode = HVACMode(climate_state.state)
+                            break
+
+        # Analyze room needs - only count significant deviations
+        heat_need_score = 0
+        cool_need_score = 0
+
+        mode_switch_threshold = self._get_global_option(
+            CONF_MODE_SWITCH_TEMP_THRESHOLD, DEFAULT_MODE_SWITCH_TEMP_THRESHOLD
+        )
+
+        for room_name in room_names:
+            room_state = self._room_states.get(room_name)
+            room_config = self._get_room_config(room_name)
+
+            if not room_state or not room_config or room_state.hvac_mode == HVACMode.OFF:
+                continue
+
+            indoor_temp = self._get_sensor_temperature(room_config[CONF_INDOOR_TEMP_SENSOR])
+            if indoor_temp is None:
+                _LOGGER.warning("Room %s: indoor temperature sensor unavailable", room_name)
+                continue
+
+            temp_diff = indoor_temp - room_state.target_temperature
+
+            # Weight deviations by magnitude - larger deviations have more influence
+            if temp_diff < -mode_switch_threshold:
+                weight = abs(temp_diff) * 10
+                heat_need_score += weight  # Need heating
+                _LOGGER.debug(
+                    "Room %s: temp %.1f < target %.1f by %.1f - adding heat_need weight %.1f (no outdoor sensor)",
+                    room_name, indoor_temp, room_state.target_temperature, temp_diff, weight
+                )
+
+            if temp_diff > mode_switch_threshold:
+                weight = abs(temp_diff) * 10
+                cool_need_score += weight  # Need cooling
+                _LOGGER.debug(
+                    "Room %s: temp %.1f > target %.1f by %.1f - adding cool_need weight %.1f (no outdoor sensor)",
+                    room_name, indoor_temp, room_state.target_temperature, temp_diff, weight
+                )
+
+        # Decide based on scores (no interval check without outdoor sensor - stay conservative)
+        _LOGGER.info(
+            "Group %s: fallback decision (no outdoor sensor) - heat_score=%.1f, cool_score=%.1f, current_mode=%s",
+            group_name, heat_need_score, cool_need_score, current_physical_mode
+        )
+
+        if heat_need_score > cool_need_score:
+            _LOGGER.info("Group %s: choosing HEAT mode (fallback, heat_score %.1f > cool_score %.1f)",
+                        group_name, heat_need_score, cool_need_score)
+            return HVACMode.HEAT
+        elif cool_need_score > heat_need_score:
+            _LOGGER.info("Group %s: choosing COOL mode (fallback, cool_score %.1f > heat_score %.1f)",
+                        group_name, cool_need_score, heat_need_score)
+            return HVACMode.COOL
+        elif current_physical_mode:
+            # Equal needs - keep current mode (conservative)
+            _LOGGER.info("Group %s: equal scores, keeping current mode %s (fallback)",
+                        group_name, current_physical_mode)
+            return current_physical_mode
+        else:
+            # No clear need and no current mode - default to HEAT (conservative choice without outdoor data)
+            _LOGGER.info("Group %s: equal scores, no current mode, defaulting to HEAT (fallback)", group_name)
+            return HVACMode.HEAT
 
     async def _control_room_temperature(self, room_name: str, physical_mode: HVACMode, mode_changed: bool = False, force: bool = False):
         """Control room temperature based on physical mode.
@@ -1291,8 +1408,21 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
                     "last_power_switch": state.last_power_switch.isoformat()
                     if state.last_power_switch
                     else None,
+                    "last_physical_mode": state.last_physical_mode.value if state.last_physical_mode else None,
+                    "preset_mode": state.preset_mode,
+                    "boost_end_time": state.boost_end_time.isoformat()
+                    if state.boost_end_time
+                    else None,
+                    "saved_temperature": state.saved_temperature,
+                    "saved_hvac_mode": state.saved_hvac_mode.value if state.saved_hvac_mode else None,
                 }
                 for room_name, state in self._room_states.items()
+            },
+            "group": {
+                "last_physical_mode_switch": self._last_group_physical_mode_switch.isoformat()
+                if self._last_group_physical_mode_switch
+                else None,
+                "last_physical_mode": self._last_group_physical_mode.value if self._last_group_physical_mode else None,
             }
         }
         await self._store.async_save(data)
@@ -1303,6 +1433,20 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
         if not data:
             return
 
+        # Restore group state
+        group_data = data.get("group", {})
+        if group_data.get("last_physical_mode_switch"):
+            self._last_group_physical_mode_switch = dt_util.parse_datetime(
+                group_data["last_physical_mode_switch"]
+            )
+        if group_data.get("last_physical_mode"):
+            self._last_group_physical_mode = HVACMode(group_data["last_physical_mode"])
+            _LOGGER.info(
+                "Restored group state: last_physical_mode=%s, last_switch=%s",
+                self._last_group_physical_mode, self._last_group_physical_mode_switch
+            )
+
+        # Restore room states
         rooms_data = data.get("rooms", {})
         for room_name, room_data in rooms_data.items():
             if room_name not in self._room_states:
@@ -1326,7 +1470,23 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
                     room_data["last_power_switch"]
                 )
 
+            if room_data.get("last_physical_mode"):
+                room_state.last_physical_mode = HVACMode(room_data["last_physical_mode"])
+
+            if room_data.get("preset_mode"):
+                room_state.preset_mode = room_data["preset_mode"]
+
+            if room_data.get("boost_end_time"):
+                room_state.boost_end_time = dt_util.parse_datetime(room_data["boost_end_time"])
+
+            if room_data.get("saved_temperature") is not None:
+                room_state.saved_temperature = room_data["saved_temperature"]
+
+            if room_data.get("saved_hvac_mode"):
+                room_state.saved_hvac_mode = HVACMode(room_data["saved_hvac_mode"])
+
             _LOGGER.info(
-                "Restored state for room %s: mode=%s, temp=%s",
-                room_name, room_state.hvac_mode, room_state.target_temperature
+                "Restored state for room %s: mode=%s, temp=%s, preset=%s, boost_end=%s",
+                room_name, room_state.hvac_mode, room_state.target_temperature,
+                room_state.preset_mode, room_state.boost_end_time
             )

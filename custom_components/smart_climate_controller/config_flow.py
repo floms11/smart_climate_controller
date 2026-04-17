@@ -116,10 +116,8 @@ class SmartClimateControllerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN)
     async def async_step_global_settings(self, user_input=None):
         """Handle global settings."""
         if user_input is not None:
-            # Extract outdoor sensor and add it to each AC unit
+            # Extract outdoor sensor - store only at global level (not per AC unit)
             outdoor_sensor = user_input.pop(CONF_OUTDOOR_TEMP_SENSOR)
-            for ac_unit in self._ac_units:
-                ac_unit[CONF_OUTDOOR_TEMP_SENSOR] = outdoor_sensor
 
             return self.async_create_entry(
                 title="Smart Climate Controller",
