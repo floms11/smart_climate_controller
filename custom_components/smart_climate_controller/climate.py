@@ -54,6 +54,7 @@ class SmartClimateThermostat(CoordinatorEntity, ClimateEntity):
     """Thermostat for a room controlled by Smart Climate Controller."""
 
     _attr_has_entity_name = True
+    _attr_translation_key = "smart_climate_controller"
     _attr_temperature_unit = UnitOfTemperature.CELSIUS
     _attr_supported_features = (
         ClimateEntityFeature.TARGET_TEMPERATURE | ClimateEntityFeature.PRESET_MODE
