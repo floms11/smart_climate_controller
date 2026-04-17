@@ -33,6 +33,7 @@
           "major_correction_value": "Значення сильної корекції",
           "major_deviation_threshold": "Поріг великого відхилення",
           "mode_switch_temp_threshold": "Поріг температури для перемикання режимів",
+          "use_linear_correction": "Використовувати лінійну корекцію температури",
           "min_mode_switch_interval": "Мін. інтервал перемикання режимів (секунди)",
           "min_power_switch_interval": "Мін. інтервал вмикання/вимикання (секунди)"
         }
@@ -66,6 +67,7 @@
           "major_correction_value": "Значення сильної корекції",
           "major_deviation_threshold": "Поріг великого відхилення",
           "mode_switch_temp_threshold": "Поріг температури для перемикання режимів",
+          "use_linear_correction": "Використовувати лінійну корекцію температури",
           "min_mode_switch_interval": "Мін. інтервал перемикання режимів (секунди)",
           "min_power_switch_interval": "Мін. інтервал вмикання/вимикання (секунди)"
         }

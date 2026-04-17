@@ -24,6 +24,7 @@ from .const import (
     CONF_OUTDOOR_TEMP_COOL_ONLY,
     CONF_OUTDOOR_TEMP_HEAT_ONLY,
     CONF_OUTDOOR_TEMP_SENSOR,
+    CONF_USE_LINEAR_CORRECTION,
     DEFAULT_MAJOR_CORRECTION_VALUE,
     DEFAULT_MAJOR_DEVIATION_THRESHOLD,
     DEFAULT_MIN_MODE_SWITCH_INTERVAL,
@@ -33,6 +34,7 @@ from .const import (
     DEFAULT_MODE_SWITCH_TEMP_THRESHOLD,
     DEFAULT_OUTDOOR_TEMP_COOL_ONLY,
     DEFAULT_OUTDOOR_TEMP_HEAT_ONLY,
+    DEFAULT_USE_LINEAR_CORRECTION,
     DOMAIN,
 )
 
@@ -186,6 +188,10 @@ class SmartClimateControllerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN)
                     )
                 ),
                 vol.Required(
+                    CONF_USE_LINEAR_CORRECTION,
+                    default=DEFAULT_USE_LINEAR_CORRECTION,
+                ): selector.BooleanSelector(),
+                vol.Required(
                     CONF_MIN_MODE_SWITCH_INTERVAL,
                     default=DEFAULT_MIN_MODE_SWITCH_INTERVAL,
                 ): selector.NumberSelector(
@@ -320,6 +326,12 @@ class SmartClimateControllerOptionsFlow(config_entries.OptionsFlow):
                         min=0.5, max=3.0, step=0.1, unit_of_measurement="°C"
                     )
                 ),
+                vol.Required(
+                    CONF_USE_LINEAR_CORRECTION,
+                    default=options.get(
+                        CONF_USE_LINEAR_CORRECTION, DEFAULT_USE_LINEAR_CORRECTION
+                    ),
+                ): selector.BooleanSelector(),
                 vol.Required(
                     CONF_MIN_MODE_SWITCH_INTERVAL,
                     default=options.get(

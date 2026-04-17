@@ -28,6 +28,7 @@ from .const import (
     CONF_OUTDOOR_TEMP_SENSOR,
     CONF_ROOM_NAME,
     CONF_ROOMS,
+    CONF_USE_LINEAR_CORRECTION,
     DEFAULT_MAJOR_CORRECTION_VALUE,
     DEFAULT_MAJOR_DEVIATION_THRESHOLD,
     DEFAULT_MIN_MODE_SWITCH_INTERVAL,
@@ -37,6 +38,7 @@ from .const import (
     DEFAULT_MODE_SWITCH_TEMP_THRESHOLD,
     DEFAULT_OUTDOOR_TEMP_COOL_ONLY,
     DEFAULT_OUTDOOR_TEMP_HEAT_ONLY,
+    DEFAULT_USE_LINEAR_CORRECTION,
     STORAGE_KEY,
     STORAGE_VERSION,
 )
@@ -439,12 +441,43 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
                     )
                     return  # Don't send any commands
                 else:
-                    # AC is ON - maintain target temperature
-                    ac_target_temp = target_temp
-                    _LOGGER.info(
-                        "Room %s: HEAT mode - within acceptable range (diff %.1f) - maintaining target %.1f",
-                        room_name, temp_diff, ac_target_temp
+                    # AC is ON - check if linear correction is enabled
+                    use_linear = self._get_global_option(
+                        CONF_USE_LINEAR_CORRECTION, DEFAULT_USE_LINEAR_CORRECTION
                     )
+                    if use_linear:
+                        # Linear correction: interpolate from 0 to minor_correction_value
+                        # temp_diff range: -minor_hysteresis to 0 to +major_threshold
+                        # For HEAT: when temp_diff is negative (cold), add correction proportionally
+                        if temp_diff < 0:
+                            # Room is colder than target: linearly increase correction
+                            # At 0°C diff: no correction
+                            # At -0.5°C diff: full minor_correction
+                            ratio = abs(temp_diff) / minor_hysteresis  # 0.0 to 1.0
+                            correction = ratio * minor_correction
+                            ac_target_temp = min(target_temp + correction, AC_MAX_TEMP)
+                            _LOGGER.info(
+                                "Room %s: HEAT mode - linear correction (diff %.1f, ratio %.2f): %.1f + %.1f = %.1f",
+                                room_name, temp_diff, ratio, target_temp, correction, ac_target_temp
+                            )
+                        else:
+                            # Room is warmer than target but within range: reduce correction
+                            # At 0°C diff: no correction
+                            # At +1.0°C diff: would turn off (handled above)
+                            ratio = temp_diff / major_threshold  # 0.0 to 1.0
+                            correction = -(ratio * minor_correction)  # Negative correction
+                            ac_target_temp = max(target_temp + correction, AC_MIN_TEMP)
+                            _LOGGER.info(
+                                "Room %s: HEAT mode - linear correction warm side (diff %.1f, ratio %.2f): %.1f + %.1f = %.1f",
+                                room_name, temp_diff, ratio, target_temp, correction, ac_target_temp
+                            )
+                    else:
+                        # No linear correction - maintain target temperature
+                        ac_target_temp = target_temp
+                        _LOGGER.info(
+                            "Room %s: HEAT mode - within acceptable range (diff %.1f) - maintaining target %.1f",
+                            room_name, temp_diff, ac_target_temp
+                        )
 
         elif physical_mode == HVACMode.COOL:
             # Cooling mode logic
@@ -486,12 +519,42 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
                     )
                     return  # Don't send any commands
                 else:
-                    # AC is ON - maintain target temperature
-                    ac_target_temp = target_temp
-                    _LOGGER.info(
-                        "Room %s: COOL mode - within acceptable range (diff %.1f) - maintaining target %.1f",
-                        room_name, temp_diff, ac_target_temp
+                    # AC is ON - check if linear correction is enabled
+                    use_linear = self._get_global_option(
+                        CONF_USE_LINEAR_CORRECTION, DEFAULT_USE_LINEAR_CORRECTION
                     )
+                    if use_linear:
+                        # Linear correction: interpolate from 0 to minor_correction_value
+                        # For COOL: when temp_diff is positive (hot), subtract correction proportionally
+                        if temp_diff > 0:
+                            # Room is hotter than target: linearly increase cooling correction
+                            # At 0°C diff: no correction
+                            # At +0.5°C diff: full minor_correction
+                            ratio = temp_diff / minor_hysteresis  # 0.0 to 1.0
+                            correction = ratio * minor_correction
+                            ac_target_temp = max(target_temp - correction, AC_MIN_TEMP)
+                            _LOGGER.info(
+                                "Room %s: COOL mode - linear correction (diff %.1f, ratio %.2f): %.1f - %.1f = %.1f",
+                                room_name, temp_diff, ratio, target_temp, correction, ac_target_temp
+                            )
+                        else:
+                            # Room is colder than target but within range: reduce cooling
+                            # At 0°C diff: no correction
+                            # At -1.0°C diff: would turn off (handled above)
+                            ratio = abs(temp_diff) / major_threshold  # 0.0 to 1.0
+                            correction = ratio * minor_correction  # Positive correction (warm up)
+                            ac_target_temp = min(target_temp + correction, AC_MAX_TEMP)
+                            _LOGGER.info(
+                                "Room %s: COOL mode - linear correction cold side (diff %.1f, ratio %.2f): %.1f + %.1f = %.1f",
+                                room_name, temp_diff, ratio, target_temp, correction, ac_target_temp
+                            )
+                    else:
+                        # No linear correction - maintain target temperature
+                        ac_target_temp = target_temp
+                        _LOGGER.info(
+                            "Room %s: COOL mode - within acceptable range (diff %.1f) - maintaining target %.1f",
+                            room_name, temp_diff, ac_target_temp
+                        )
 
         # Ensure temperature is within AC limits
         if ac_target_temp is not None:

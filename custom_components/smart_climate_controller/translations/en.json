@@ -33,6 +33,7 @@
           "major_correction_value": "Major correction value",
           "major_deviation_threshold": "Major deviation threshold",
           "mode_switch_temp_threshold": "Mode switch temperature threshold",
+          "use_linear_correction": "Use linear temperature correction",
           "min_mode_switch_interval": "Min mode switch interval (seconds)",
           "min_power_switch_interval": "Min power switch interval (seconds)"
         }
@@ -66,6 +67,7 @@
           "major_correction_value": "Major correction value",
           "major_deviation_threshold": "Major deviation threshold",
           "mode_switch_temp_threshold": "Mode switch temperature threshold",
+          "use_linear_correction": "Use linear temperature correction",
           "min_mode_switch_interval": "Min mode switch interval (seconds)",
           "min_power_switch_interval": "Min power switch interval (seconds)"
         }
