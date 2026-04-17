@@ -1207,16 +1207,14 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
         # Save state
         await self._save_state()
 
-        # Notify listeners
+        # Notify listeners - this will trigger UI update and next regular update cycle
+        # will apply changes to ACs respecting MIN_MODE_SWITCH_INTERVAL
         self.async_set_updated_data({})
 
-        # Trigger processing to apply changes to physical ACs with force_sync
-        try:
-            ac_names = list(self._room_states.keys())
-            if ac_names:
-                await self._process_group("multi_split", ac_names, force_sync=True)
-        except Exception as err:
-            _LOGGER.error("Error processing ACs after boost restoration: %s", err)
+        _LOGGER.info(
+            "Thermostat %s: boost restoration complete, AC changes will apply in next update cycle",
+            room_name
+        )
 
     def get_room_state(self, room_name: str) -> RoomState | None:
         """Get room state."""
