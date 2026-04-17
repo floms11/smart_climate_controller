@@ -87,14 +87,9 @@
         "state_attributes": {
           "preset_mode": {
             "state": {
-              "comfort": "Comfort",
-              "boost_heat": "Boost heating",
-              "boost_cool": "Boost cooling"
-            },
-            "state_icon": {
-              "comfort": "mdi:home-thermometer",
-              "boost_heat": "mdi:fire",
-              "boost_cool": "mdi:snowflake"
+              "comfort": "🏠 Comfort",
+              "boost_heat": "🔥 Boost heating",
+              "boost_cool": "❄️ Boost cooling"
             }
           }
         }

@@ -1076,8 +1076,10 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
         # Save state immediately
         await self._save_state()
 
-        # Trigger immediate update to apply boost mode
-        await self.async_request_refresh()
+        # Notify listeners that state has changed (updates UI)
+        # Don't call async_request_refresh() here because we already applied
+        # the mode change directly via _control_room_climate above
+        self.async_set_updated_data({})
 
     async def _restore_from_boost(self, room_name: str):
         """Restore room state after boost mode ends."""
