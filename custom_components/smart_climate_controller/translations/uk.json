@@ -85,12 +85,21 @@
         "state_attributes": {
           "preset_mode": {
             "state": {
-              "comfort": "🏠 Комфорт",
-              "boost_heat": "🔥 Форсований обігрів",
-              "boost_cool": "❄️ Форсоване охолодження"
+              "comfort": "Комфорт",
+              "boost_heat": "Форсований обігрів",
+              "boost_cool": "Форсоване охолодження"
             }
           }
         }
+      }
+    }
+  },
+  "selector": {
+    "preset_mode": {
+      "options": {
+        "comfort": "Комфорт",
+        "boost_heat": "Форсований обігрів",
+        "boost_cool": "Форсоване охолодження"
       }
     }
   }

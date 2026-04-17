@@ -88,12 +88,21 @@
         "state_attributes": {
           "preset_mode": {
             "state": {
-              "comfort": "🏠 Comfort",
-              "boost_heat": "🔥 Boost heating",
-              "boost_cool": "❄️ Boost cooling"
+              "comfort": "Comfort",
+              "boost_heat": "Boost Heating",
+              "boost_cool": "Boost Cooling"
             }
           }
         }
+      }
+    }
+  },
+  "selector": {
+    "preset_mode": {
+      "options": {
+        "comfort": "Comfort",
+        "boost_heat": "Boost Heating",
+        "boost_cool": "Boost Cooling"
       }
     }
   }
