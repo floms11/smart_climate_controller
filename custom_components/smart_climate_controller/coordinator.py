@@ -519,13 +519,14 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
                         room_name, target_temp, major_correction, ac_target_temp
                     )
             else:
-                # Within acceptable range (-0.5°C to +1°C)
+                # Within ±minor_hysteresis range (comfortable zone)
+                # When mode changes, turn off ACs that are within this comfortable range
                 if mode_changed:
-                    # Mode just changed - turn off ACs in acceptable range
+                    # Temperature is within ±minor_hysteresis - turn off
                     should_turn_off = True
                     _LOGGER.info(
-                        "Room %s: HEAT mode - within acceptable range (diff %.1f), mode changed - turning off",
-                        room_name, temp_diff
+                        "Room %s: HEAT mode - within ±%.1f°C range (diff %.1f), mode changed - turning off",
+                        room_name, minor_hysteresis, temp_diff
                     )
                 elif is_currently_off:
                     # AC is already OFF and temp in range - keep it off
@@ -620,13 +621,14 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
                         room_name, target_temp, major_correction, ac_target_temp
                     )
             else:
-                # Within acceptable range (-1°C to +0.5°C)
+                # Within ±minor_hysteresis range (comfortable zone)
+                # When mode changes, turn off ACs that are within this comfortable range
                 if mode_changed:
-                    # Mode just changed - turn off ACs in acceptable range
+                    # Temperature is within ±minor_hysteresis - turn off
                     should_turn_off = True
                     _LOGGER.info(
-                        "Room %s: COOL mode - within acceptable range (diff %.1f), mode changed - turning off",
-                        room_name, temp_diff
+                        "Room %s: COOL mode - within ±%.1f°C range (diff %.1f), mode changed - turning off",
+                        room_name, minor_hysteresis, temp_diff
                     )
                 elif is_currently_off:
                     # AC is already OFF and temp in range - keep it off

@@ -8,5 +8,5 @@
   "iot_class": "local_polling",
   "issue_tracker": "https://github.com/floms/smart_climate_controller/issues",
   "requirements": [],
-  "version": "2.23.0"
+  "version": "2.26.0"
 }
