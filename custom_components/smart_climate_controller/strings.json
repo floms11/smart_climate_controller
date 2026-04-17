@@ -89,8 +89,8 @@
           "preset_mode": {
             "state": {
               "comfort": "Comfort",
-              "boost_heat": "Boost Heating",
-              "boost_cool": "Boost Cooling"
+              "boost_heat": "Boost Heat",
+              "boost_cool": "Boost Cool"
             }
           }
         }
@@ -101,8 +101,8 @@
     "preset_mode": {
       "options": {
         "comfort": "Comfort",
-        "boost_heat": "Boost Heating",
-        "boost_cool": "Boost Cooling"
+        "boost_heat": "Boost Heat",
+        "boost_cool": "Boost Cool"
       }
     }
   }

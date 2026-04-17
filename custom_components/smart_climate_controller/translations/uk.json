@@ -86,8 +86,8 @@
           "preset_mode": {
             "state": {
               "comfort": "Комфорт",
-              "boost_heat": "Форсований обігрів",
-              "boost_cool": "Форсоване охолодження"
+              "boost_heat": "Обігрів+",
+              "boost_cool": "Охолодження+"
             }
           }
         }
@@ -98,8 +98,8 @@
     "preset_mode": {
       "options": {
         "comfort": "Комфорт",
-        "boost_heat": "Форсований обігрів",
-        "boost_cool": "Форсоване охолодження"
+        "boost_heat": "Обігрів+",
+        "boost_cool": "Охолодження+"
       }
     }
   }

@@ -21,6 +21,7 @@ from .const import (
     PRESET_BOOST_COOL,
     PRESET_BOOST_HEAT,
     PRESET_COMFORT,
+    PRESET_ICONS,
 )
 from .coordinator import SmartClimateCoordinator
 
@@ -125,6 +126,11 @@ class SmartClimateThermostat(CoordinatorEntity, ClimateEntity):
         if room_state and hasattr(room_state, 'preset_mode'):
             return room_state.preset_mode
         return PRESET_COMFORT
+
+    @property
+    def icon(self) -> str:
+        """Return the icon based on current preset mode."""
+        return PRESET_ICONS.get(self.preset_mode, "mdi:home-thermometer-outline")
 
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
         """Set HVAC mode."""

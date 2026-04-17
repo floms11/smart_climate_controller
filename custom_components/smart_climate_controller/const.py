@@ -47,6 +47,13 @@ PRESET_COMFORT = "comfort"
 PRESET_BOOST_HEAT = "boost_heat"
 PRESET_BOOST_COOL = "boost_cool"
 
+# Preset mode icons (MDI icons)
+PRESET_ICONS = {
+    PRESET_COMFORT: "mdi:home-thermometer-outline",
+    PRESET_BOOST_HEAT: "mdi:fire",
+    PRESET_BOOST_COOL: "mdi:snowflake"
+}
+
 # Storage
 STORAGE_KEY = f"{DOMAIN}.storage"
 STORAGE_VERSION = 1
