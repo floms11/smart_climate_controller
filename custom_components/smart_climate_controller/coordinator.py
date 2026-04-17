@@ -548,23 +548,20 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
                     )
                     if use_linear:
                         # Linear correction works only in ±minor_hysteresis range (±0.5°C)
-                        # Beyond that, use major correction
-                        if temp_diff < -minor_hysteresis or temp_diff > minor_hysteresis:
-                            # Beyond ±0.5°C range - use major correction
-                            if temp_diff < -minor_hysteresis:
-                                # Cold side: beyond -0.5°C
-                                ac_target_temp = min(target_temp + major_correction, AC_MAX_TEMP)
-                                _LOGGER.info(
-                                    "Room %s: HEAT mode - beyond linear range (diff %.1f < -%.1f): %.1f + %.1f = %.1f",
-                                    room_name, temp_diff, minor_hysteresis, target_temp, major_correction, ac_target_temp
-                                )
-                            else:
-                                # Warm side: beyond +0.5°C
-                                ac_target_temp = max(target_temp - major_correction, AC_MIN_TEMP)
-                                _LOGGER.info(
-                                    "Room %s: HEAT mode - beyond linear range (diff %.1f > +%.1f): %.1f - %.1f = %.1f",
-                                    room_name, temp_diff, minor_hysteresis, target_temp, major_correction, ac_target_temp
-                                )
+                        if temp_diff < -minor_hysteresis:
+                            # Cold side: beyond -0.5°C - apply major correction
+                            ac_target_temp = min(target_temp + major_correction, AC_MAX_TEMP)
+                            _LOGGER.info(
+                                "Room %s: HEAT mode - beyond linear range (diff %.1f < -%.1f): %.1f + %.1f = %.1f",
+                                room_name, temp_diff, minor_hysteresis, target_temp, major_correction, ac_target_temp
+                            )
+                        elif temp_diff > minor_hysteresis:
+                            # Warm side: beyond +0.5°C - shouldn't heat when hot, turn off
+                            should_turn_off = True
+                            _LOGGER.info(
+                                "Room %s: HEAT mode - AC is ON but room too hot (diff %.1f > +%.1f) - TURNING OFF",
+                                room_name, temp_diff, minor_hysteresis
+                            )
                         else:
                             # Within ±0.5°C range - linear correction
                             # At 0°C diff: no correction
@@ -656,23 +653,20 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
                     )
                     if use_linear:
                         # Linear correction works only in ±minor_hysteresis range (±0.5°C)
-                        # Beyond that, use major correction
-                        if temp_diff < -minor_hysteresis or temp_diff > minor_hysteresis:
-                            # Beyond ±0.5°C range - use major correction
-                            if temp_diff < -minor_hysteresis:
-                                # Cold side: beyond -0.5°C
-                                ac_target_temp = min(target_temp + major_correction, AC_MAX_TEMP)
-                                _LOGGER.info(
-                                    "Room %s: COOL mode - beyond linear range (diff %.1f < -%.1f): %.1f + %.1f = %.1f",
-                                    room_name, temp_diff, minor_hysteresis, target_temp, major_correction, ac_target_temp
-                                )
-                            else:
-                                # Hot side: beyond +0.5°C
-                                ac_target_temp = max(target_temp - major_correction, AC_MIN_TEMP)
-                                _LOGGER.info(
-                                    "Room %s: COOL mode - beyond linear range (diff %.1f > +%.1f): %.1f - %.1f = %.1f",
-                                    room_name, temp_diff, minor_hysteresis, target_temp, major_correction, ac_target_temp
-                                )
+                        if temp_diff > minor_hysteresis:
+                            # Hot side: beyond +0.5°C - apply major correction
+                            ac_target_temp = max(target_temp - major_correction, AC_MIN_TEMP)
+                            _LOGGER.info(
+                                "Room %s: COOL mode - beyond linear range (diff %.1f > +%.1f): %.1f - %.1f = %.1f",
+                                room_name, temp_diff, minor_hysteresis, target_temp, major_correction, ac_target_temp
+                            )
+                        elif temp_diff < -minor_hysteresis:
+                            # Cold side: beyond -0.5°C - shouldn't cool when cold, turn off
+                            should_turn_off = True
+                            _LOGGER.info(
+                                "Room %s: COOL mode - AC is ON but room too cold (diff %.1f < -%.1f) - TURNING OFF",
+                                room_name, temp_diff, minor_hysteresis
+                            )
                         else:
                             # Within ±0.5°C range - linear correction
                             # At 0°C diff: no correction
