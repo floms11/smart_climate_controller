@@ -52,7 +52,7 @@ from .const import (
 
 _LOGGER = logging.getLogger(__name__)
 
-UPDATE_INTERVAL = timedelta(seconds=30)
+UPDATE_INTERVAL = timedelta(seconds=10)
 
 
 class RoomState:
@@ -88,6 +88,9 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
         self._store = Store(hass, STORAGE_VERSION, STORAGE_KEY)
         self._room_states: dict[str, RoomState] = {}
         self._climate_entities: dict[str, Any] = {}
+        # Track last group physical mode switch (HEAT ↔ COOL) separately from individual room switches
+        self._last_group_physical_mode_switch: datetime | None = None
+        self._last_group_physical_mode: HVACMode | None = None
 
         # Initialize room states - support both old and new formats
         # New format: CONF_AC_UNITS
@@ -197,18 +200,24 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
 
         _LOGGER.info("Group %s: physical mode = %s (will control ACs)", group_name, physical_mode)
 
-        # Step 3: Check if physical mode changed for the group
-        group_mode_changed = False
-        for room_name in room_names:
-            room_state = self._room_states.get(room_name)
-            if room_state and room_state.hvac_mode != HVACMode.OFF:
-                if room_state.last_physical_mode != physical_mode:
-                    group_mode_changed = True
-                    _LOGGER.info(
-                        "Group %s: physical mode changed from %s to %s",
-                        group_name, room_state.last_physical_mode, physical_mode
-                    )
-                    break
+        # Step 3: Check if GROUP physical mode changed (HEAT ↔ COOL, not individual room ON/OFF)
+        group_mode_changed = (
+            self._last_group_physical_mode is not None and
+            self._last_group_physical_mode != physical_mode
+        )
+
+        if group_mode_changed:
+            _LOGGER.info(
+                "Group %s: physical mode changed from %s to %s",
+                group_name, self._last_group_physical_mode, physical_mode
+            )
+            # Update group's last physical mode switch time
+            self._last_group_physical_mode_switch = dt_util.utcnow()
+            self._last_group_physical_mode = physical_mode
+        elif self._last_group_physical_mode is None:
+            # First time determining mode
+            self._last_group_physical_mode = physical_mode
+            _LOGGER.info("Group %s: initial physical mode set to %s", group_name, physical_mode)
 
         # Step 4: If group mode changed or force_sync is True, synchronize all ACs to new mode immediately
         if group_mode_changed or force_sync:
@@ -360,20 +369,20 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
             CONF_MIN_MODE_SWITCH_INTERVAL, DEFAULT_MIN_MODE_SWITCH_INTERVAL
         )
 
-        # Find the most recent mode switch in the group and determine current physical mode
-        most_recent_switch = None
-        current_physical_mode = None
+        # Determine current physical mode from group's last physical mode
+        current_physical_mode = self._last_group_physical_mode
 
-        for room_name in room_names:
-            room_state = self._room_states.get(room_name)
-            if not room_state:
-                continue
+        # If no group mode tracked yet, determine from rooms
+        if current_physical_mode is None:
+            for room_name in room_names:
+                room_state = self._room_states.get(room_name)
+                if not room_state:
+                    continue
 
-            # Determine current physical mode from last_physical_mode or actual AC state
-            if current_physical_mode is None:
-                # First try to get from last_physical_mode
+                # Try to get from last_physical_mode or actual AC state
                 if room_state.last_physical_mode in (HVACMode.HEAT, HVACMode.COOL):
                     current_physical_mode = room_state.last_physical_mode
+                    break
                 else:
                     # Fallback: get from actual AC state
                     room_config = self._get_room_config(room_name)
@@ -381,29 +390,19 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
                         climate_state = self.hass.states.get(room_config[CONF_CLIMATE_ENTITY])
                         if climate_state and climate_state.state in (HVACMode.HEAT, HVACMode.COOL):
                             current_physical_mode = HVACMode(climate_state.state)
+                            break
 
-            if room_state.last_mode_switch:
-                if most_recent_switch is None or room_state.last_mode_switch > most_recent_switch:
-                    most_recent_switch = room_state.last_mode_switch
-
-        # If mode was switched recently, keep current mode
-        if most_recent_switch and current_physical_mode:
-            time_since_switch = (dt_util.utcnow() - most_recent_switch).total_seconds()
-            if time_since_switch < min_interval:
-                _LOGGER.debug(
-                    "Group %s: keeping mode %s (switched %.0f sec ago, min %d sec)",
-                    group_name, current_physical_mode, time_since_switch, min_interval
-                )
-                return current_physical_mode
-
-        # Analyze room needs - only count significant deviations
+        # Analyze room needs first - only count significant deviations
         heat_need_score = 0
         cool_need_score = 0
+        critical_deviation_found = False
 
         # Use mode switch temperature threshold for mode switching decisions
         mode_switch_threshold = self._get_global_option(
             CONF_MODE_SWITCH_TEMP_THRESHOLD, DEFAULT_MODE_SWITCH_TEMP_THRESHOLD
         )
+        # Critical deviation threshold: 2.25°C by default (mode_switch_threshold * 1.5)
+        critical_threshold = mode_switch_threshold * 1.5
 
         for room_name in room_names:
             room_state = self._room_states.get(room_name)
@@ -417,6 +416,14 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
                 continue
 
             temp_diff = indoor_temp - room_state.target_temperature
+
+            # Check for critical deviation that requires immediate mode switch
+            if abs(temp_diff) > critical_threshold:
+                critical_deviation_found = True
+                _LOGGER.info(
+                    "Room %s: CRITICAL deviation %.1f°C (threshold %.1f) - will bypass mode switch interval",
+                    room_name, temp_diff, critical_threshold
+                )
 
             # Only count deviations greater than mode_switch_threshold to minimize mode switching
             if temp_diff < -mode_switch_threshold:
@@ -433,11 +440,37 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
                     room_name, indoor_temp, room_state.target_temperature, temp_diff, mode_switch_threshold
                 )
 
+        # Check if we should respect mode switch interval (use GROUP's last physical mode switch)
+        # If there's a critical deviation or opposite mode is needed, bypass the interval
+        should_bypass_interval = False
+        if self._last_group_physical_mode_switch and current_physical_mode:
+            time_since_switch = (dt_util.utcnow() - self._last_group_physical_mode_switch).total_seconds()
+            if time_since_switch < min_interval:
+                # Check if we need opposite mode (HEAT when in COOL, or COOL when in HEAT)
+                need_opposite_mode = (
+                    (current_physical_mode == HVACMode.HEAT and cool_need_score > heat_need_score) or
+                    (current_physical_mode == HVACMode.COOL and heat_need_score > cool_need_score)
+                )
+
+                if critical_deviation_found or need_opposite_mode:
+                    should_bypass_interval = True
+                    _LOGGER.info(
+                        "Group %s: BYPASSING mode switch interval (%.0f sec < %d sec) due to %s",
+                        group_name, time_since_switch, min_interval,
+                        "critical deviation" if critical_deviation_found else "opposite mode needed"
+                    )
+                else:
+                    _LOGGER.debug(
+                        "Group %s: keeping mode %s (switched %.0f sec ago, min %d sec)",
+                        group_name, current_physical_mode, time_since_switch, min_interval
+                    )
+                    return current_physical_mode
+
         # Decide based on scores
         current_mode_str = str(current_physical_mode) if current_physical_mode else "None"
         _LOGGER.info(
-            "Group %s: transition zone decision - heat_score=%d, cool_score=%d, current_mode=%s, threshold=%.1f",
-            group_name, heat_need_score, cool_need_score, current_mode_str, mode_switch_threshold
+            "Group %s: transition zone decision - heat_score=%d, cool_score=%d, current_mode=%s, threshold=%.1f, bypass=%s",
+            group_name, heat_need_score, cool_need_score, current_mode_str, mode_switch_threshold, should_bypass_interval
         )
 
         if heat_need_score > cool_need_score:
