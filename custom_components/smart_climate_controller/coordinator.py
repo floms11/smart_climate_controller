@@ -502,21 +502,27 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
                     "Room %s: HEAT mode - major correction: %.1f + %.1f = %.1f",
                     room_name, target_temp, major_correction, ac_target_temp
                 )
-            elif temp_diff < -minor_hysteresis or temp_diff > minor_hysteresis:
-                # Room is beyond ±0.5°C range - major correction
-                if temp_diff < -minor_hysteresis:
-                    # Cold side: add major correction
-                    ac_target_temp = min(target_temp + major_correction, AC_MAX_TEMP)
+            elif temp_diff < -minor_hysteresis:
+                # Room is cold (beyond -minor_hysteresis) - major correction
+                ac_target_temp = min(target_temp + major_correction, AC_MAX_TEMP)
+                _LOGGER.info(
+                    "Room %s: HEAT mode - major correction: %.1f + %.1f = %.1f",
+                    room_name, target_temp, major_correction, ac_target_temp
+                )
+            elif temp_diff > minor_hysteresis:
+                # Room is hot (beyond +minor_hysteresis) - don't heat, turn off or keep off
+                if is_currently_off:
                     _LOGGER.info(
-                        "Room %s: HEAT mode - major correction cold side: %.1f + %.1f = %.1f",
-                        room_name, target_temp, major_correction, ac_target_temp
+                        "Room %s: HEAT mode - too hot (diff %.1f > +%.1f), AC already OFF - keeping OFF",
+                        room_name, temp_diff, minor_hysteresis
                     )
+                    return  # Don't send any commands
                 else:
-                    # Warm side: subtract major correction
-                    ac_target_temp = max(target_temp - major_correction, AC_MIN_TEMP)
+                    # AC is ON but room is hot - turn it off
+                    should_turn_off = True
                     _LOGGER.info(
-                        "Room %s: HEAT mode - major correction warm side: %.1f - %.1f = %.1f",
-                        room_name, target_temp, major_correction, ac_target_temp
+                        "Room %s: HEAT mode - too hot (diff %.1f > +%.1f) - TURNING OFF",
+                        room_name, temp_diff, minor_hysteresis
                     )
             else:
                 # Within ±minor_hysteresis range (comfortable zone)
@@ -604,21 +610,27 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
                     "Room %s: COOL mode - major correction: %.1f - %.1f = %.1f",
                     room_name, target_temp, major_correction, ac_target_temp
                 )
-            elif temp_diff < -minor_hysteresis or temp_diff > minor_hysteresis:
-                # Room is beyond ±0.5°C range - major correction
-                if temp_diff > minor_hysteresis:
-                    # Hot side: subtract major correction
-                    ac_target_temp = max(target_temp - major_correction, AC_MIN_TEMP)
+            elif temp_diff > minor_hysteresis:
+                # Room is hot (beyond +minor_hysteresis) - major correction
+                ac_target_temp = max(target_temp - major_correction, AC_MIN_TEMP)
+                _LOGGER.info(
+                    "Room %s: COOL mode - major correction: %.1f - %.1f = %.1f",
+                    room_name, target_temp, major_correction, ac_target_temp
+                )
+            elif temp_diff < -minor_hysteresis:
+                # Room is cold (beyond -minor_hysteresis) - don't cool, turn off or keep off
+                if is_currently_off:
                     _LOGGER.info(
-                        "Room %s: COOL mode - major correction hot side: %.1f - %.1f = %.1f",
-                        room_name, target_temp, major_correction, ac_target_temp
+                        "Room %s: COOL mode - too cold (diff %.1f < -%.1f), AC already OFF - keeping OFF",
+                        room_name, temp_diff, minor_hysteresis
                     )
+                    return  # Don't send any commands
                 else:
-                    # Cold side: add major correction
-                    ac_target_temp = min(target_temp + major_correction, AC_MAX_TEMP)
+                    # AC is ON but room is cold - turn it off
+                    should_turn_off = True
                     _LOGGER.info(
-                        "Room %s: COOL mode - major correction cold side: %.1f + %.1f = %.1f",
-                        room_name, target_temp, major_correction, ac_target_temp
+                        "Room %s: COOL mode - too cold (diff %.1f < -%.1f) - TURNING OFF",
+                        room_name, temp_diff, minor_hysteresis
                     )
             else:
                 # Within ±minor_hysteresis range (comfortable zone)
