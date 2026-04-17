@@ -507,8 +507,8 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
         should_turn_off = False
 
         _LOGGER.info(
-            "Room %s: temperature control - indoor=%.1f, target=%.1f, diff=%.1f, mode=%s, major_threshold=%.1f",
-            room_name, indoor_temp, target_temp, temp_diff, physical_mode, major_threshold
+            "Room %s: temperature control - indoor=%.1f, target=%.1f, diff=%.1f, mode=%s, major_threshold=%.1f, is_off=%s",
+            room_name, indoor_temp, target_temp, temp_diff, physical_mode, major_threshold, is_currently_off
         )
 
         if physical_mode == HVACMode.HEAT:
