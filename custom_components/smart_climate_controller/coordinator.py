@@ -238,9 +238,8 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
                             # Force mode change, bypassing interval checks
                             room_state.last_mode_switch = dt_util.utcnow()
                             await self._control_room_climate(room_name, physical_mode, room_state.target_temperature, force=True)
-
-                        # Update tracked physical mode
-                        room_state.last_physical_mode = physical_mode
+                            # Update tracked physical mode only after successful sync
+                            room_state.last_physical_mode = physical_mode
 
         # Step 5: Control each room's temperature based on physical mode
         for room_name in room_names:
@@ -257,7 +256,8 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
                          room_name, physical_mode, room_state.target_temperature, mode_changed)
             await self._control_room_temperature(room_name, physical_mode, mode_changed)
 
-            # Update last physical mode
+            # Update last physical mode for rooms that weren't synced in Step 4
+            # (rooms that were OFF or already had correct mode)
             room_state.last_physical_mode = physical_mode
 
     def _determine_group_hvac_mode(self, room_names: list[str]) -> HVACMode:
@@ -360,7 +360,7 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
             CONF_MIN_MODE_SWITCH_INTERVAL, DEFAULT_MIN_MODE_SWITCH_INTERVAL
         )
 
-        # Find the most recent mode switch in the group
+        # Find the most recent mode switch in the group and determine current physical mode
         most_recent_switch = None
         current_physical_mode = None
 
@@ -369,15 +369,22 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
             if not room_state:
                 continue
 
-            if room_state.last_mode_switch:
-                if most_recent_switch is None or room_state.last_mode_switch > most_recent_switch:
-                    most_recent_switch = room_state.last_mode_switch
-                    # Get current physical mode from AC
+            # Determine current physical mode from last_physical_mode or actual AC state
+            if current_physical_mode is None:
+                # First try to get from last_physical_mode
+                if room_state.last_physical_mode in (HVACMode.HEAT, HVACMode.COOL):
+                    current_physical_mode = room_state.last_physical_mode
+                else:
+                    # Fallback: get from actual AC state
                     room_config = self._get_room_config(room_name)
                     if room_config:
                         climate_state = self.hass.states.get(room_config[CONF_CLIMATE_ENTITY])
                         if climate_state and climate_state.state in (HVACMode.HEAT, HVACMode.COOL):
                             current_physical_mode = HVACMode(climate_state.state)
+
+            if room_state.last_mode_switch:
+                if most_recent_switch is None or room_state.last_mode_switch > most_recent_switch:
+                    most_recent_switch = room_state.last_mode_switch
 
         # If mode was switched recently, keep current mode
         if most_recent_switch and current_physical_mode:
@@ -414,20 +421,38 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
             # Only count deviations greater than mode_switch_threshold to minimize mode switching
             if temp_diff < -mode_switch_threshold:
                 heat_need_score += 10  # Need heating
+                _LOGGER.debug(
+                    "Room %s: temp %.1f < target %.1f by %.1f (threshold %.1f) - adding heat_need",
+                    room_name, indoor_temp, room_state.target_temperature, temp_diff, mode_switch_threshold
+                )
 
             if temp_diff > mode_switch_threshold:
                 cool_need_score += 10  # Need cooling
+                _LOGGER.debug(
+                    "Room %s: temp %.1f > target %.1f by %.1f (threshold %.1f) - adding cool_need",
+                    room_name, indoor_temp, room_state.target_temperature, temp_diff, mode_switch_threshold
+                )
 
         # Decide based on scores
+        current_mode_str = str(current_physical_mode) if current_physical_mode else "None"
+        _LOGGER.info(
+            "Group %s: transition zone decision - heat_score=%d, cool_score=%d, current_mode=%s, threshold=%.1f",
+            group_name, heat_need_score, cool_need_score, current_mode_str, mode_switch_threshold
+        )
+
         if heat_need_score > cool_need_score:
+            _LOGGER.info("Group %s: choosing HEAT mode (heat_score %d > cool_score %d)", group_name, heat_need_score, cool_need_score)
             return HVACMode.HEAT
         elif cool_need_score > heat_need_score:
+            _LOGGER.info("Group %s: choosing COOL mode (cool_score %d > heat_score %d)", group_name, cool_need_score, heat_need_score)
             return HVACMode.COOL
         elif current_physical_mode:
             # Equal needs - keep current mode
+            _LOGGER.info("Group %s: equal scores, keeping current mode %s", group_name, current_physical_mode)
             return current_physical_mode
         else:
             # No clear need and no current mode - default to cool in transition zone
+            _LOGGER.info("Group %s: equal scores, no current mode, defaulting to COOL", group_name)
             return HVACMode.COOL
 
     async def _control_room_temperature(self, room_name: str, physical_mode: HVACMode, mode_changed: bool = False, force: bool = False):
@@ -994,19 +1019,28 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
             room_state.preset_mode = PRESET_BOOST_HEAT
 
             # Get current indoor temperature
+            boost_offset = self._get_global_option(CONF_BOOST_TEMP_OFFSET, DEFAULT_BOOST_TEMP_OFFSET)
             room_config = self._get_room_config(room_name)
+            indoor_temp = None
             if room_config:
                 indoor_temp = self._get_sensor_temperature(room_config[CONF_INDOOR_TEMP_SENSOR])
-                if indoor_temp is not None:
-                    # Set boost temperature
-                    boost_offset = self._get_global_option(CONF_BOOST_TEMP_OFFSET, DEFAULT_BOOST_TEMP_OFFSET)
-                    boost_temp = indoor_temp + boost_offset
-                    room_state.target_temperature = max(16.0, min(30.0, boost_temp))
 
-                    _LOGGER.info(
-                        "Thermostat %s: BOOST HEAT - indoor=%.1f, offset=%.1f, new_target=%.1f",
-                        room_name, indoor_temp, boost_offset, room_state.target_temperature
-                    )
+            if indoor_temp is not None:
+                # Set boost temperature based on current indoor temperature
+                boost_temp = indoor_temp + boost_offset
+                room_state.target_temperature = max(16.0, min(30.0, boost_temp))
+                _LOGGER.info(
+                    "Thermostat %s: BOOST HEAT - indoor=%.1f, offset=%.1f, new_target=%.1f",
+                    room_name, indoor_temp, boost_offset, room_state.target_temperature
+                )
+            else:
+                # Fallback: use current target temperature + offset
+                boost_temp = room_state.target_temperature + boost_offset
+                room_state.target_temperature = max(16.0, min(30.0, boost_temp))
+                _LOGGER.warning(
+                    "Thermostat %s: BOOST HEAT - indoor temp unavailable, using target=%.1f + offset=%.1f = %.1f",
+                    room_name, room_state.saved_temperature, boost_offset, room_state.target_temperature
+                )
 
             # Keep thermostat in AUTO mode, but force physical mode to HEAT
             # This allows other thermostats to adapt while maintaining AUTO flexibility
@@ -1036,19 +1070,28 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
             room_state.preset_mode = PRESET_BOOST_COOL
 
             # Get current indoor temperature
+            boost_offset = self._get_global_option(CONF_BOOST_TEMP_OFFSET, DEFAULT_BOOST_TEMP_OFFSET)
             room_config = self._get_room_config(room_name)
+            indoor_temp = None
             if room_config:
                 indoor_temp = self._get_sensor_temperature(room_config[CONF_INDOOR_TEMP_SENSOR])
-                if indoor_temp is not None:
-                    # Set boost temperature
-                    boost_offset = self._get_global_option(CONF_BOOST_TEMP_OFFSET, DEFAULT_BOOST_TEMP_OFFSET)
-                    boost_temp = indoor_temp - boost_offset
-                    room_state.target_temperature = max(16.0, min(30.0, boost_temp))
 
-                    _LOGGER.info(
-                        "Thermostat %s: BOOST COOL - indoor=%.1f, offset=%.1f, new_target=%.1f",
-                        room_name, indoor_temp, boost_offset, room_state.target_temperature
-                    )
+            if indoor_temp is not None:
+                # Set boost temperature based on current indoor temperature
+                boost_temp = indoor_temp - boost_offset
+                room_state.target_temperature = max(16.0, min(30.0, boost_temp))
+                _LOGGER.info(
+                    "Thermostat %s: BOOST COOL - indoor=%.1f, offset=%.1f, new_target=%.1f",
+                    room_name, indoor_temp, boost_offset, room_state.target_temperature
+                )
+            else:
+                # Fallback: use current target temperature - offset
+                boost_temp = room_state.target_temperature - boost_offset
+                room_state.target_temperature = max(16.0, min(30.0, boost_temp))
+                _LOGGER.warning(
+                    "Thermostat %s: BOOST COOL - indoor temp unavailable, using target=%.1f - offset=%.1f = %.1f",
+                    room_name, room_state.saved_temperature, boost_offset, room_state.target_temperature
+                )
 
             # Keep thermostat in AUTO mode, but force physical mode to COOL
             # This allows other thermostats to adapt while maintaining AUTO flexibility
@@ -1088,43 +1131,49 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
             if physical_mode:
                 # Synchronize all other thermostats to AUTO mode and adapt ACs to new physical mode
                 for other_room_name in ac_names:
-                    other_room_state = self._room_states.get(other_room_name)
-                    if not other_room_state or other_room_state.hvac_mode == HVACMode.OFF:
-                        continue
+                    try:
+                        other_room_state = self._room_states.get(other_room_name)
+                        if not other_room_state or other_room_state.hvac_mode == HVACMode.OFF:
+                            continue
 
-                    # Skip the room that activated boost - already handled above
-                    if other_room_name == room_name:
-                        continue
+                        # Skip the room that activated boost - already handled above
+                        if other_room_name == room_name:
+                            continue
 
-                    _LOGGER.info(
-                        "Room %s: syncing to AUTO mode and adapting to physical mode %s after boost activation in %s",
-                        other_room_name, physical_mode, room_name
-                    )
-
-                    # Switch other thermostats to AUTO mode to sync with boost thermostat
-                    if other_room_state.hvac_mode != HVACMode.AUTO:
-                        old_hvac_mode = other_room_state.hvac_mode
-                        other_room_state.hvac_mode = HVACMode.AUTO
-                        other_room_state.last_mode_switch = dt_util.utcnow()
                         _LOGGER.info(
-                            "Room %s: thermostat mode changed from %s to AUTO (syncing with boost)",
-                            other_room_name, old_hvac_mode
+                            "Room %s: syncing to AUTO mode and adapting to physical mode %s after boost activation in %s",
+                            other_room_name, physical_mode, room_name
                         )
 
-                    # Check if physical mode changed for this room
-                    mode_changed = other_room_state.last_physical_mode != physical_mode
+                        # Switch other thermostats to AUTO mode to sync with boost thermostat
+                        if other_room_state.hvac_mode != HVACMode.AUTO:
+                            old_hvac_mode = other_room_state.hvac_mode
+                            other_room_state.hvac_mode = HVACMode.AUTO
+                            other_room_state.last_mode_switch = dt_util.utcnow()
+                            _LOGGER.info(
+                                "Room %s: thermostat mode changed from %s to AUTO (syncing with boost)",
+                                other_room_name, old_hvac_mode
+                            )
 
-                    # Update the tracked physical mode
-                    other_room_state.last_physical_mode = physical_mode
+                        # Check if physical mode changed for this room
+                        mode_changed = other_room_state.last_physical_mode != physical_mode
 
-                    # Reset mode switch timer to allow immediate changes (including turning OFF)
-                    if mode_changed:
-                        other_room_state.last_mode_switch = dt_util.utcnow()
+                        # Update the tracked physical mode
+                        other_room_state.last_physical_mode = physical_mode
 
-                    # Control temperature - this will turn AC on/off based on temperature needs
-                    # _control_room_temperature will decide if AC should be ON (in physical_mode) or OFF
-                    # Use force=True to bypass interval checks
-                    await self._control_room_temperature(other_room_name, physical_mode, mode_changed=mode_changed, force=True)
+                        # Reset mode switch timer to allow immediate changes (including turning OFF)
+                        if mode_changed:
+                            other_room_state.last_mode_switch = dt_util.utcnow()
+
+                        # Control temperature - this will turn AC on/off based on temperature needs
+                        # _control_room_temperature will decide if AC should be ON (in physical_mode) or OFF
+                        # Use force=True to bypass interval checks
+                        await self._control_room_temperature(other_room_name, physical_mode, mode_changed=mode_changed, force=True)
+                    except Exception as err:
+                        _LOGGER.error(
+                            "Room %s: error during boost synchronization: %s",
+                            other_room_name, err, exc_info=True
+                        )
 
         # Notify listeners that state has changed (updates UI)
         self.async_set_updated_data({})
