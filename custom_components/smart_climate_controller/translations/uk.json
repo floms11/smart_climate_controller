@@ -86,8 +86,13 @@
           "preset_mode": {
             "state": {
               "comfort": "Комфорт",
-              "boost_heat": "Форсований нагрів",
+              "boost_heat": "Форсований обігрів",
               "boost_cool": "Форсоване охолодження"
+            },
+            "state_icon": {
+              "comfort": "mdi:home-thermometer",
+              "boost_heat": "mdi:fire",
+              "boost_cool": "mdi:snowflake"
             }
           }
         }

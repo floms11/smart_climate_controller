@@ -190,7 +190,49 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
 
         _LOGGER.info("Group %s: physical mode = %s (will control ACs)", group_name, physical_mode)
 
-        # Step 3: Control each room's climate based on physical mode
+        # Step 3: Check if physical mode changed for the group
+        group_mode_changed = False
+        for room_name in room_names:
+            room_state = self._room_states.get(room_name)
+            if room_state and room_state.hvac_mode != HVACMode.OFF:
+                if room_state.last_physical_mode != physical_mode:
+                    group_mode_changed = True
+                    _LOGGER.info(
+                        "Group %s: physical mode changed from %s to %s",
+                        group_name, room_state.last_physical_mode, physical_mode
+                    )
+                    break
+
+        # Step 4: If group mode changed, synchronize all ACs to new mode immediately
+        if group_mode_changed:
+            _LOGGER.info("Group %s: synchronizing all ACs to mode %s", group_name, physical_mode)
+            for room_name in room_names:
+                room_state = self._room_states.get(room_name)
+                if not room_state or room_state.hvac_mode == HVACMode.OFF:
+                    continue
+
+                # Synchronize AC mode (bypass temperature logic, just set mode)
+                room_config = self._get_room_config(room_name)
+                if room_config:
+                    climate_entity_id = room_config[CONF_CLIMATE_ENTITY]
+                    climate_state = self.hass.states.get(climate_entity_id)
+                    if climate_state:
+                        current_mode = HVACMode(climate_state.state) if climate_state.state in HVACMode else None
+
+                        # Only sync if AC mode doesn't match
+                        if current_mode != physical_mode and current_mode != HVACMode.OFF:
+                            _LOGGER.info(
+                                "Room %s: syncing AC from %s to %s",
+                                room_name, current_mode, physical_mode
+                            )
+                            # Force mode change by resetting timer
+                            room_state.last_mode_switch = dt_util.utcnow()
+                            await self._control_room_climate(room_name, physical_mode, room_state.target_temperature)
+
+                        # Update tracked physical mode
+                        room_state.last_physical_mode = physical_mode
+
+        # Step 5: Control each room's temperature based on physical mode
         for room_name in room_names:
             room_state = self._room_states.get(room_name)
             if not room_state or room_state.hvac_mode == HVACMode.OFF:
@@ -986,6 +1028,9 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
                 room_name, room_state.boost_end_time, boost_duration
             )
 
+            # Immediately apply HEAT mode to AC (bypass temperature control logic)
+            await self._control_room_climate(room_name, HVACMode.HEAT, room_state.target_temperature)
+
         elif preset_mode == PRESET_BOOST_COOL:
             # Save current state before boost
             room_state.saved_temperature = room_state.target_temperature
@@ -1024,6 +1069,9 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
                 "Thermostat %s: boost will end at %s (in %d seconds, staying in AUTO with forced COOL)",
                 room_name, room_state.boost_end_time, boost_duration
             )
+
+            # Immediately apply COOL mode to AC (bypass temperature control logic)
+            await self._control_room_climate(room_name, HVACMode.COOL, room_state.target_temperature)
 
         # Save state immediately
         await self._save_state()
