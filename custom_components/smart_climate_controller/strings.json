@@ -39,7 +39,8 @@
           "min_mode_switch_interval": "Min mode switch interval (seconds)",
           "min_power_switch_interval": "Min power switch interval (seconds)",
           "boost_temp_offset": "Boost temperature offset",
-          "boost_duration": "Boost duration (seconds)"
+          "boost_duration": "Boost duration (seconds)",
+          "mode_switch_score_threshold": "Mode switch score threshold"
         }
       }
     },
@@ -74,7 +75,8 @@
           "min_mode_switch_interval": "Min mode switch interval (seconds)",
           "min_power_switch_interval": "Min power switch interval (seconds)",
           "boost_temp_offset": "Boost temperature offset",
-          "boost_duration": "Boost duration (seconds)"
+          "boost_duration": "Boost duration (seconds)",
+          "mode_switch_score_threshold": "Mode switch score threshold"
         }
       }
     },

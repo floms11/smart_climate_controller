@@ -24,6 +24,7 @@ from .const import (
     CONF_MIN_POWER_SWITCH_INTERVAL,
     CONF_MINOR_CORRECTION_HYSTERESIS,
     CONF_MINOR_CORRECTION_VALUE,
+    CONF_MODE_SWITCH_SCORE_THRESHOLD,
     CONF_MODE_SWITCH_TEMP_THRESHOLD,
     CONF_OUTDOOR_TEMP_COOL_ONLY,
     CONF_OUTDOOR_TEMP_HEAT_ONLY,
@@ -39,6 +40,7 @@ from .const import (
     DEFAULT_MIN_POWER_SWITCH_INTERVAL,
     DEFAULT_MINOR_CORRECTION_HYSTERESIS,
     DEFAULT_MINOR_CORRECTION_VALUE,
+    DEFAULT_MODE_SWITCH_SCORE_THRESHOLD,
     DEFAULT_MODE_SWITCH_TEMP_THRESHOLD,
     DEFAULT_OUTDOOR_TEMP_COOL_ONLY,
     DEFAULT_OUTDOOR_TEMP_HEAT_ONLY,
@@ -355,7 +357,7 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
                 "Group %s: no previous mode, analyzing room needs (outdoor sensor unavailable)",
                 group_name
             )
-            return await self._determine_mode_without_outdoor(group_name, room_names)
+            return await self._determine_mode_in_transition_zone(group_name, room_names)
 
         heat_only_threshold = self._get_global_option(
             CONF_OUTDOOR_TEMP_HEAT_ONLY, DEFAULT_OUTDOOR_TEMP_HEAT_ONLY
@@ -377,7 +379,7 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
         )
 
     async def _determine_mode_in_transition_zone(
-        self, group_name: str, room_names: list[str], outdoor_temp: float
+        self, group_name: str, room_names: list[str], outdoor_temp: float | None = None
     ) -> HVACMode | None:
         """Determine mode when outdoor temperature is in transition zone.
 
@@ -489,19 +491,45 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
                     )
                     return current_physical_mode
 
-        # Decide based on scores
+        # Decide based on scores with hysteresis threshold
+        score_threshold = self._get_global_option(
+            CONF_MODE_SWITCH_SCORE_THRESHOLD, DEFAULT_MODE_SWITCH_SCORE_THRESHOLD
+        )
+        score_diff = abs(heat_need_score - cool_need_score)
+
         current_mode_str = str(current_physical_mode) if current_physical_mode else "None"
         _LOGGER.info(
-            "Group %s: transition zone decision - heat_score=%.1f, cool_score=%.1f, current_mode=%s, threshold=%.1f, bypass=%s",
-            group_name, heat_need_score, cool_need_score, current_mode_str, mode_switch_threshold, should_bypass_interval
+            "Group %s: transition zone decision - heat_score=%.1f, cool_score=%.1f, diff=%.1f, threshold=%.1f, current_mode=%s, bypass=%s",
+            group_name, heat_need_score, cool_need_score, score_diff, score_threshold, current_mode_str, should_bypass_interval
         )
 
+        # Apply hysteresis: switch mode only if score difference exceeds threshold
         if heat_need_score > cool_need_score:
-            _LOGGER.info("Group %s: choosing HEAT mode (heat_score %.1f > cool_score %.1f)", group_name, heat_need_score, cool_need_score)
-            return HVACMode.HEAT
+            if score_diff >= score_threshold:
+                _LOGGER.info("Group %s: choosing HEAT mode (heat_score %.1f > cool_score %.1f by %.1f >= threshold %.1f)",
+                            group_name, heat_need_score, cool_need_score, score_diff, score_threshold)
+                return HVACMode.HEAT
+            elif current_physical_mode:
+                _LOGGER.info("Group %s: heat score higher but diff %.1f < threshold %.1f, keeping current mode %s",
+                            group_name, score_diff, score_threshold, current_physical_mode)
+                return current_physical_mode
+            else:
+                _LOGGER.info("Group %s: heat score higher but diff %.1f < threshold %.1f, no current mode, choosing HEAT",
+                            group_name, score_diff, score_threshold)
+                return HVACMode.HEAT
         elif cool_need_score > heat_need_score:
-            _LOGGER.info("Group %s: choosing COOL mode (cool_score %.1f > heat_score %.1f)", group_name, cool_need_score, heat_need_score)
-            return HVACMode.COOL
+            if score_diff >= score_threshold:
+                _LOGGER.info("Group %s: choosing COOL mode (cool_score %.1f > heat_score %.1f by %.1f >= threshold %.1f)",
+                            group_name, cool_need_score, heat_need_score, score_diff, score_threshold)
+                return HVACMode.COOL
+            elif current_physical_mode:
+                _LOGGER.info("Group %s: cool score higher but diff %.1f < threshold %.1f, keeping current mode %s",
+                            group_name, score_diff, score_threshold, current_physical_mode)
+                return current_physical_mode
+            else:
+                _LOGGER.info("Group %s: cool score higher but diff %.1f < threshold %.1f, no current mode, choosing COOL",
+                            group_name, score_diff, score_threshold)
+                return HVACMode.COOL
         elif current_physical_mode:
             # Equal needs - keep current mode
             _LOGGER.info("Group %s: equal scores, keeping current mode %s", group_name, current_physical_mode)
@@ -510,100 +538,6 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
             # No clear need and no current mode - default to cool in transition zone
             _LOGGER.info("Group %s: equal scores, no current mode, defaulting to COOL", group_name)
             return HVACMode.COOL
-
-    async def _determine_mode_without_outdoor(
-        self, group_name: str, room_names: list[str]
-    ) -> HVACMode | None:
-        """Determine mode when outdoor temperature sensor is unavailable.
-
-        Falls back to analyzing room needs without outdoor temperature context.
-        Similar to transition zone logic but without outdoor temperature constraints.
-        """
-        # Determine current physical mode from group's last physical mode
-        current_physical_mode = self._last_group_physical_mode
-
-        # If no group mode tracked yet, determine from rooms
-        if current_physical_mode is None:
-            for room_name in room_names:
-                room_state = self._room_states.get(room_name)
-                if not room_state:
-                    continue
-
-                # Try to get from last_physical_mode or actual AC state
-                if room_state.last_physical_mode in (HVACMode.HEAT, HVACMode.COOL):
-                    current_physical_mode = room_state.last_physical_mode
-                    break
-                else:
-                    # Fallback: get from actual AC state
-                    room_config = self._get_room_config(room_name)
-                    if room_config:
-                        climate_state = self.hass.states.get(room_config[CONF_CLIMATE_ENTITY])
-                        if climate_state and climate_state.state in (HVACMode.HEAT, HVACMode.COOL):
-                            current_physical_mode = HVACMode(climate_state.state)
-                            break
-
-        # Analyze room needs - only count significant deviations
-        heat_need_score = 0
-        cool_need_score = 0
-
-        mode_switch_threshold = self._get_global_option(
-            CONF_MODE_SWITCH_TEMP_THRESHOLD, DEFAULT_MODE_SWITCH_TEMP_THRESHOLD
-        )
-
-        for room_name in room_names:
-            room_state = self._room_states.get(room_name)
-            room_config = self._get_room_config(room_name)
-
-            if not room_state or not room_config or room_state.hvac_mode == HVACMode.OFF:
-                continue
-
-            indoor_temp = self._get_sensor_temperature(room_config[CONF_INDOOR_TEMP_SENSOR])
-            if indoor_temp is None:
-                _LOGGER.warning("Room %s: indoor temperature sensor unavailable", room_name)
-                continue
-
-            temp_diff = indoor_temp - room_state.target_temperature
-
-            # Weight deviations by magnitude - larger deviations have more influence
-            if temp_diff < -mode_switch_threshold:
-                weight = abs(temp_diff) * 10
-                heat_need_score += weight  # Need heating
-                _LOGGER.debug(
-                    "Room %s: temp %.1f < target %.1f by %.1f - adding heat_need weight %.1f (no outdoor sensor)",
-                    room_name, indoor_temp, room_state.target_temperature, temp_diff, weight
-                )
-
-            if temp_diff > mode_switch_threshold:
-                weight = abs(temp_diff) * 10
-                cool_need_score += weight  # Need cooling
-                _LOGGER.debug(
-                    "Room %s: temp %.1f > target %.1f by %.1f - adding cool_need weight %.1f (no outdoor sensor)",
-                    room_name, indoor_temp, room_state.target_temperature, temp_diff, weight
-                )
-
-        # Decide based on scores (no interval check without outdoor sensor - stay conservative)
-        _LOGGER.info(
-            "Group %s: fallback decision (no outdoor sensor) - heat_score=%.1f, cool_score=%.1f, current_mode=%s",
-            group_name, heat_need_score, cool_need_score, current_physical_mode
-        )
-
-        if heat_need_score > cool_need_score:
-            _LOGGER.info("Group %s: choosing HEAT mode (fallback, heat_score %.1f > cool_score %.1f)",
-                        group_name, heat_need_score, cool_need_score)
-            return HVACMode.HEAT
-        elif cool_need_score > heat_need_score:
-            _LOGGER.info("Group %s: choosing COOL mode (fallback, cool_score %.1f > heat_score %.1f)",
-                        group_name, cool_need_score, heat_need_score)
-            return HVACMode.COOL
-        elif current_physical_mode:
-            # Equal needs - keep current mode (conservative)
-            _LOGGER.info("Group %s: equal scores, keeping current mode %s (fallback)",
-                        group_name, current_physical_mode)
-            return current_physical_mode
-        else:
-            # No clear need and no current mode - default to HEAT (conservative choice without outdoor data)
-            _LOGGER.info("Group %s: equal scores, no current mode, defaulting to HEAT (fallback)", group_name)
-            return HVACMode.HEAT
 
     async def _control_room_temperature(self, room_name: str, physical_mode: HVACMode, mode_changed: bool = False, force: bool = False):
         """Control room temperature based on physical mode.

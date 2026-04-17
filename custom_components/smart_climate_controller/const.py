@@ -27,6 +27,7 @@ CONF_MIN_MODE_SWITCH_INTERVAL = "min_mode_switch_interval"
 CONF_MIN_POWER_SWITCH_INTERVAL = "min_power_switch_interval"
 CONF_BOOST_TEMP_OFFSET = "boost_temp_offset"
 CONF_BOOST_DURATION = "boost_duration"
+CONF_MODE_SWITCH_SCORE_THRESHOLD = "mode_switch_score_threshold"
 
 # Defaults
 DEFAULT_OUTDOOR_TEMP_HEAT_ONLY = 10.0
@@ -41,6 +42,7 @@ DEFAULT_MIN_MODE_SWITCH_INTERVAL = 1800  # 30 minutes in seconds
 DEFAULT_MIN_POWER_SWITCH_INTERVAL = 60  # 1 minute in seconds
 DEFAULT_BOOST_TEMP_OFFSET = 5.0  # Temperature offset for boost modes
 DEFAULT_BOOST_DURATION = 300  # 5 minutes in seconds
+DEFAULT_MODE_SWITCH_SCORE_THRESHOLD = 5.0  # Minimum score difference to switch modes (hysteresis)
 
 # Preset modes
 PRESET_COMFORT = "comfort"

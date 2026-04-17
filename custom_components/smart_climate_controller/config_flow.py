@@ -22,6 +22,7 @@ from .const import (
     CONF_MIN_POWER_SWITCH_INTERVAL,
     CONF_MINOR_CORRECTION_HYSTERESIS,
     CONF_MINOR_CORRECTION_VALUE,
+    CONF_MODE_SWITCH_SCORE_THRESHOLD,
     CONF_MODE_SWITCH_TEMP_THRESHOLD,
     CONF_OUTDOOR_TEMP_COOL_ONLY,
     CONF_OUTDOOR_TEMP_HEAT_ONLY,
@@ -35,6 +36,7 @@ from .const import (
     DEFAULT_MIN_POWER_SWITCH_INTERVAL,
     DEFAULT_MINOR_CORRECTION_HYSTERESIS,
     DEFAULT_MINOR_CORRECTION_VALUE,
+    DEFAULT_MODE_SWITCH_SCORE_THRESHOLD,
     DEFAULT_MODE_SWITCH_TEMP_THRESHOLD,
     DEFAULT_OUTDOOR_TEMP_COOL_ONLY,
     DEFAULT_OUTDOOR_TEMP_HEAT_ONLY,
@@ -225,6 +227,14 @@ class SmartClimateControllerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN)
                         min=60, max=1800, step=60, unit_of_measurement="s"
                     )
                 ),
+                vol.Required(
+                    CONF_MODE_SWITCH_SCORE_THRESHOLD,
+                    default=DEFAULT_MODE_SWITCH_SCORE_THRESHOLD,
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=0.0, max=50.0, step=1.0
+                    )
+                ),
             }
         )
 
@@ -388,6 +398,16 @@ class SmartClimateControllerOptionsFlow(config_entries.OptionsFlow):
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(
                         min=60, max=1800, step=60, unit_of_measurement="s"
+                    )
+                ),
+                vol.Required(
+                    CONF_MODE_SWITCH_SCORE_THRESHOLD,
+                    default=options.get(
+                        CONF_MODE_SWITCH_SCORE_THRESHOLD, DEFAULT_MODE_SWITCH_SCORE_THRESHOLD
+                    ),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=0.0, max=50.0, step=1.0
                     )
                 ),
             }
