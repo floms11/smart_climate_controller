@@ -97,9 +97,18 @@
   "selector": {
     "preset_mode": {
       "options": {
-        "comfort": "Комфорт",
-        "boost_heat": "Обігрів+",
-        "boost_cool": "Охолодження+"
+        "comfort": {
+          "label": "Комфорт",
+          "icon": "mdi:home-thermometer-outline"
+        },
+        "boost_heat": {
+          "label": "Обігрів+",
+          "icon": "mdi:fire"
+        },
+        "boost_cool": {
+          "label": "Охолодження+",
+          "icon": "mdi:snowflake"
+        }
       }
     }
   }

@@ -100,9 +100,18 @@
   "selector": {
     "preset_mode": {
       "options": {
-        "comfort": "Comfort",
-        "boost_heat": "Boost Heat",
-        "boost_cool": "Boost Cool"
+        "comfort": {
+          "label": "Comfort",
+          "icon": "mdi:home-thermometer-outline"
+        },
+        "boost_heat": {
+          "label": "Boost Heat",
+          "icon": "mdi:fire"
+        },
+        "boost_cool": {
+          "label": "Boost Cool",
+          "icon": "mdi:snowflake"
+        }
       }
     }
   }
