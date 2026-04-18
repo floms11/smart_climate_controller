@@ -227,38 +227,9 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
             self._last_group_physical_mode = physical_mode
             _LOGGER.info("Group %s: initial physical mode set to %s", group_name, physical_mode)
 
-        # Step 4: If group mode changed or force_sync is True, synchronize all ACs to new mode immediately
-        if group_mode_changed or force_sync:
-            if force_sync:
-                _LOGGER.info("Group %s: FORCE synchronizing all ACs to mode %s (user initiated)", group_name, physical_mode)
-            else:
-                _LOGGER.info("Group %s: synchronizing all ACs to mode %s", group_name, physical_mode)
-            for room_name in room_names:
-                room_state = self._room_states.get(room_name)
-                if not room_state or room_state.hvac_mode == HVACMode.OFF:
-                    continue
-
-                # Synchronize AC mode (bypass temperature logic, just set mode)
-                room_config = self._get_room_config(room_name)
-                if room_config:
-                    climate_entity_id = room_config[CONF_CLIMATE_ENTITY]
-                    climate_state = self.hass.states.get(climate_entity_id)
-                    if climate_state:
-                        current_mode = HVACMode(climate_state.state) if climate_state.state in HVACMode else None
-
-                        # Only sync if AC mode doesn't match
-                        if current_mode != physical_mode and current_mode != HVACMode.OFF:
-                            _LOGGER.info(
-                                "Room %s: syncing AC from %s to %s",
-                                room_name, current_mode, physical_mode
-                            )
-                            # Force mode change, bypassing interval checks
-                            room_state.last_mode_switch = dt_util.utcnow()
-                            await self._control_room_climate(room_name, physical_mode, room_state.target_temperature, force=True)
-                            # Update tracked physical mode only after successful sync
-                            room_state.last_physical_mode = physical_mode
-
-        # Step 5: Control each room's temperature based on physical mode
+        # Step 4: Control each room's temperature based on physical mode
+        # This replaces previous Step 4 (aggressive sync) and Step 5 (regular control)
+        # to ensure temperature logic is always respected during mode changes.
         for room_name in room_names:
             room_state = self._room_states.get(room_name)
             if not room_state or room_state.hvac_mode == HVACMode.OFF:
@@ -269,12 +240,19 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
             # Check if physical mode changed for this room
             mode_changed = room_state.last_physical_mode != physical_mode
 
-            _LOGGER.debug("Room %s: controlling temperature (physical_mode=%s, target=%.1f, mode_changed=%s)",
-                         room_name, physical_mode, room_state.target_temperature, mode_changed)
-            await self._control_room_temperature(room_name, physical_mode, mode_changed)
+            _LOGGER.debug("Room %s: controlling temperature (physical_mode=%s, target=%.1f, mode_changed=%s, force=%s)",
+                         room_name, physical_mode, room_state.target_temperature, mode_changed, force_sync or group_mode_changed)
+            
+            # Use force=True if group mode changed or force_sync requested,
+            # to ensure ACs switch to the new group mode (or turn off) immediately.
+            await self._control_room_temperature(
+                room_name, 
+                physical_mode, 
+                mode_changed=mode_changed, 
+                force=force_sync or group_mode_changed
+            )
 
-            # Update last physical mode for rooms that weren't synced in Step 4
-            # (rooms that were OFF or already had correct mode)
+            # Update last physical mode
             room_state.last_physical_mode = physical_mode
 
     def _determine_group_hvac_mode(self, room_names: list[str]) -> HVACMode:
@@ -578,19 +556,12 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
                     "Room %s: 🔴 HEAT mode - room too hot (diff %.1f > %.1f) - TURNING OFF",
                     room_name, temp_diff, major_threshold
                 )
-            elif temp_diff < -major_threshold:
-                # Room is very cold (<-1°C) - major correction
-                ac_target_temp = min(target_temp + major_correction, AC_MAX_TEMP)
-                _LOGGER.info(
-                    "Room %s: HEAT mode - major correction: %.1f + %.1f = %.1f",
-                    room_name, target_temp, major_correction, ac_target_temp
-                )
             elif temp_diff < -minor_hysteresis:
                 # Room is cold (beyond -minor_hysteresis) - major correction
                 ac_target_temp = min(target_temp + major_correction, AC_MAX_TEMP)
                 _LOGGER.info(
-                    "Room %s: HEAT mode - major correction: %.1f + %.1f = %.1f",
-                    room_name, target_temp, major_correction, ac_target_temp
+                    "Room %s: HEAT mode - major correction (diff %.1f): %.1f + %.1f = %.1f",
+                    room_name, temp_diff, target_temp, major_correction, ac_target_temp
                 )
             elif temp_diff > minor_hysteresis:
                 # Room is hot (beyond +minor_hysteresis) - don't heat, turn off or keep off
@@ -609,12 +580,12 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
                     )
             else:
                 # Within ±minor_hysteresis range (comfortable zone)
-                # When mode changes, turn off ACs that are within this comfortable range
-                if mode_changed:
+                # When mode changes or force is True, turn off ACs that are within this comfortable range
+                if mode_changed or force:
                     # Temperature is within ±minor_hysteresis - turn off
                     should_turn_off = True
                     _LOGGER.info(
-                        "Room %s: HEAT mode - within ±%.1f°C range (diff %.1f), mode changed - turning off",
+                        "Room %s: HEAT mode - within ±%.1f°C range (diff %.1f), mode changed/forced - turning off",
                         room_name, minor_hysteresis, temp_diff
                     )
                 elif is_currently_off:
@@ -667,19 +638,12 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
                     "Room %s: 🔴 COOL mode - room too cold (diff %.1f < -%.1f) - TURNING OFF",
                     room_name, temp_diff, major_threshold
                 )
-            elif temp_diff > major_threshold:
-                # Room is very hot (>1°C) - major correction
-                ac_target_temp = max(target_temp - major_correction, AC_MIN_TEMP)
-                _LOGGER.info(
-                    "Room %s: COOL mode - major correction: %.1f - %.1f = %.1f",
-                    room_name, target_temp, major_correction, ac_target_temp
-                )
             elif temp_diff > minor_hysteresis:
                 # Room is hot (beyond +minor_hysteresis) - major correction
                 ac_target_temp = max(target_temp - major_correction, AC_MIN_TEMP)
                 _LOGGER.info(
-                    "Room %s: COOL mode - major correction: %.1f - %.1f = %.1f",
-                    room_name, target_temp, major_correction, ac_target_temp
+                    "Room %s: COOL mode - major correction (diff %.1f): %.1f - %.1f = %.1f",
+                    room_name, temp_diff, target_temp, major_correction, ac_target_temp
                 )
             elif temp_diff < -minor_hysteresis:
                 # Room is cold (beyond -minor_hysteresis) - don't cool, turn off or keep off
@@ -698,12 +662,12 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
                     )
             else:
                 # Within ±minor_hysteresis range (comfortable zone)
-                # When mode changes, turn off ACs that are within this comfortable range
-                if mode_changed:
+                # When mode changes or force is True, turn off ACs that are within this comfortable range
+                if mode_changed or force:
                     # Temperature is within ±minor_hysteresis - turn off
                     should_turn_off = True
                     _LOGGER.info(
-                        "Room %s: COOL mode - within ±%.1f°C range (diff %.1f), mode changed - turning off",
+                        "Room %s: COOL mode - within ±%.1f°C range (diff %.1f), mode changed/forced - turning off",
                         room_name, minor_hysteresis, temp_diff
                     )
                 elif is_currently_off:
@@ -1249,7 +1213,7 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
             room_state.saved_hvac_mode
         )
 
-        # Restore saved state
+        # Restored saved state
         if room_state.saved_temperature is not None:
             room_state.target_temperature = room_state.saved_temperature
         if room_state.saved_hvac_mode is not None:
@@ -1290,14 +1254,17 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
         # Save state
         await self._save_state()
 
-        # Notify listeners - this will trigger UI update and next regular update cycle
-        # will apply changes to ACs respecting MIN_MODE_SWITCH_INTERVAL
-        self.async_set_updated_data({})
+        # Trigger immediate processing to apply restored mode and temperatures to ACs
+        try:
+            ac_names = list(self._room_states.keys())
+            if ac_names:
+                _LOGGER.info("Thermostat %s: triggering immediate sync after boost ended", room_name)
+                await self._process_group("multi_split", ac_names, force_sync=True)
+        except Exception as err:
+            _LOGGER.error("Error processing ACs after boost ended: %s", err)
 
-        _LOGGER.info(
-            "Thermostat %s: boost restoration complete, AC changes will apply in next update cycle",
-            room_name
-        )
+        # Notify listeners - this will update UI
+        self.async_set_updated_data({})
 
     def get_room_state(self, room_name: str) -> RoomState | None:
         """Get room state."""
