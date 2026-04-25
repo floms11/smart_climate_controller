@@ -28,6 +28,11 @@ CONF_MIN_POWER_SWITCH_INTERVAL = "min_power_switch_interval"
 CONF_BOOST_TEMP_OFFSET = "boost_temp_offset"
 CONF_BOOST_DURATION = "boost_duration"
 CONF_MODE_SWITCH_SCORE_THRESHOLD = "mode_switch_score_threshold"
+CONF_ECO_THRESHOLD_MULTIPLIER = "eco_threshold_multiplier"
+CONF_ECO_MINOR_CORRECTION_VALUE = "eco_minor_correction_value"
+CONF_ECO_MAJOR_CORRECTION_VALUE = "eco_major_correction_value"
+CONF_ECO_EARLY_TURN_OFF = "eco_early_turn_off"
+CONF_ECO_WEIGHT_FACTOR = "eco_weight_factor"
 
 # Defaults
 DEFAULT_OUTDOOR_TEMP_HEAT_ONLY = 10.0
@@ -43,17 +48,24 @@ DEFAULT_MIN_POWER_SWITCH_INTERVAL = 60  # 1 minute in seconds
 DEFAULT_BOOST_TEMP_OFFSET = 5.0  # Temperature offset for boost modes
 DEFAULT_BOOST_DURATION = 300  # 5 minutes in seconds
 DEFAULT_MODE_SWITCH_SCORE_THRESHOLD = 5.0  # Minimum score difference to switch modes (hysteresis)
+DEFAULT_ECO_THRESHOLD_MULTIPLIER = 2.0
+DEFAULT_ECO_MINOR_CORRECTION_VALUE = 2.0
+DEFAULT_ECO_MAJOR_CORRECTION_VALUE = 5.0
+DEFAULT_ECO_EARLY_TURN_OFF = True
+DEFAULT_ECO_WEIGHT_FACTOR = 0.5
 
 # Preset modes
 PRESET_COMFORT = "comfort"
 PRESET_BOOST_HEAT = "boost_heat"
 PRESET_BOOST_COOL = "boost_cool"
+PRESET_ECO = "eco"
 
 # Preset mode icons (MDI icons)
 PRESET_ICONS = {
     PRESET_COMFORT: "mdi:home-thermometer-outline",
     PRESET_BOOST_HEAT: "mdi:fire",
-    PRESET_BOOST_COOL: "mdi:snowflake"
+    PRESET_BOOST_COOL: "mdi:snowflake",
+    PRESET_ECO: "mdi:leaf"
 }
 
 # Storage

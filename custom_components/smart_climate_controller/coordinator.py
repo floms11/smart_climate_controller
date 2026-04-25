@@ -26,6 +26,11 @@ from .const import (
     CONF_MINOR_CORRECTION_VALUE,
     CONF_MODE_SWITCH_SCORE_THRESHOLD,
     CONF_MODE_SWITCH_TEMP_THRESHOLD,
+    CONF_ECO_THRESHOLD_MULTIPLIER,
+    CONF_ECO_MINOR_CORRECTION_VALUE,
+    CONF_ECO_MAJOR_CORRECTION_VALUE,
+    CONF_ECO_EARLY_TURN_OFF,
+    CONF_ECO_WEIGHT_FACTOR,
     CONF_OUTDOOR_TEMP_COOL_ONLY,
     CONF_OUTDOOR_TEMP_HEAT_ONLY,
     CONF_OUTDOOR_TEMP_SENSOR,
@@ -42,12 +47,18 @@ from .const import (
     DEFAULT_MINOR_CORRECTION_VALUE,
     DEFAULT_MODE_SWITCH_SCORE_THRESHOLD,
     DEFAULT_MODE_SWITCH_TEMP_THRESHOLD,
+    DEFAULT_ECO_THRESHOLD_MULTIPLIER,
+    DEFAULT_ECO_MINOR_CORRECTION_VALUE,
+    DEFAULT_ECO_MAJOR_CORRECTION_VALUE,
+    DEFAULT_ECO_EARLY_TURN_OFF,
+    DEFAULT_ECO_WEIGHT_FACTOR,
     DEFAULT_OUTDOOR_TEMP_COOL_ONLY,
     DEFAULT_OUTDOOR_TEMP_HEAT_ONLY,
     DEFAULT_USE_LINEAR_CORRECTION,
     PRESET_BOOST_COOL,
     PRESET_BOOST_HEAT,
     PRESET_COMFORT,
+    PRESET_ECO,
     STORAGE_KEY,
     STORAGE_VERSION,
 )
@@ -232,9 +243,12 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
         # to ensure temperature logic is always respected during mode changes.
         for room_name in room_names:
             room_state = self._room_states.get(room_name)
-            if not room_state or room_state.hvac_mode == HVACMode.OFF:
-                _LOGGER.debug("Room %s: skipping (state=%s, mode=%s)",
-                             room_name, room_state, room_state.hvac_mode if room_state else None)
+            if not room_state:
+                continue
+
+            if room_state.hvac_mode == HVACMode.OFF:
+                _LOGGER.debug("Room %s: thermostat is OFF, ensuring physical AC is OFF", room_name)
+                await self._control_room_climate(room_name, HVACMode.OFF, None, force=force_sync)
                 continue
 
             # Check if physical mode changed for this room
@@ -414,22 +428,40 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
 
             temp_diff = indoor_temp - room_state.target_temperature
 
+            # Apply ECO mode threshold multiplier and weight factor
+            current_mode_switch_threshold = mode_switch_threshold
+            weight_factor = 1.0
+            if room_state.preset_mode == PRESET_ECO:
+                eco_multiplier = self._get_global_option(
+                    CONF_ECO_THRESHOLD_MULTIPLIER, DEFAULT_ECO_THRESHOLD_MULTIPLIER
+                )
+                current_mode_switch_threshold *= eco_multiplier
+                
+                weight_factor = self._get_global_option(
+                    CONF_ECO_WEIGHT_FACTOR, DEFAULT_ECO_WEIGHT_FACTOR
+                )
+                
+                _LOGGER.debug(
+                    "Room %s: ECO mode active, threshold multiplier %.1f (%.1f -> %.1f), weight factor %.1f",
+                    room_name, eco_multiplier, mode_switch_threshold, current_mode_switch_threshold, weight_factor
+                )
+
             # Weight deviations by magnitude - larger deviations have more influence
-            # Score = abs(deviation) * 10 (e.g., 5°C deviation = 50 points, 1.6°C = 16 points)
-            if temp_diff < -mode_switch_threshold:
-                weight = abs(temp_diff) * 10
+            # Score = abs(deviation) * 10 * weight_factor
+            if temp_diff < -current_mode_switch_threshold:
+                weight = abs(temp_diff) * 10 * weight_factor
                 heat_need_score += weight  # Need heating
                 _LOGGER.debug(
                     "Room %s: temp %.1f < target %.1f by %.1f (threshold %.1f) - adding heat_need weight %.1f",
-                    room_name, indoor_temp, room_state.target_temperature, temp_diff, mode_switch_threshold, weight
+                    room_name, indoor_temp, room_state.target_temperature, temp_diff, current_mode_switch_threshold, weight
                 )
 
-            if temp_diff > mode_switch_threshold:
-                weight = abs(temp_diff) * 10
+            if temp_diff > current_mode_switch_threshold:
+                weight = abs(temp_diff) * 10 * weight_factor
                 cool_need_score += weight  # Need cooling
                 _LOGGER.debug(
                     "Room %s: temp %.1f > target %.1f by %.1f (threshold %.1f) - adding cool_need weight %.1f",
-                    room_name, indoor_temp, room_state.target_temperature, temp_diff, mode_switch_threshold, weight
+                    room_name, indoor_temp, room_state.target_temperature, temp_diff, current_mode_switch_threshold, weight
                 )
 
         # Check if we should respect mode switch interval (use GROUP's last physical mode switch)
@@ -534,6 +566,35 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
         major_threshold = self._get_global_option(
             CONF_MAJOR_DEVIATION_THRESHOLD, DEFAULT_MAJOR_DEVIATION_THRESHOLD
         )
+        early_turn_off = self._get_global_option(
+            CONF_ECO_EARLY_TURN_OFF, DEFAULT_ECO_EARLY_TURN_OFF
+        )
+
+        # Apply ECO mode threshold multiplier and custom correction values
+        is_eco = room_state.preset_mode == PRESET_ECO
+        if is_eco:
+            eco_multiplier = self._get_global_option(
+                CONF_ECO_THRESHOLD_MULTIPLIER, DEFAULT_ECO_THRESHOLD_MULTIPLIER
+            )
+            minor_hysteresis *= eco_multiplier
+            major_threshold *= eco_multiplier
+            minor_correction = self._get_global_option(
+                CONF_ECO_MINOR_CORRECTION_VALUE, DEFAULT_ECO_MINOR_CORRECTION_VALUE
+            )
+            major_correction = self._get_global_option(
+                CONF_ECO_MAJOR_CORRECTION_VALUE, DEFAULT_ECO_MAJOR_CORRECTION_VALUE
+            )
+            _LOGGER.debug(
+                "Room %s: ECO mode active - hysteresis=%.1f, threshold=%.1f, minor_corr=%.1f, major_corr=%.1f",
+                room_name, minor_hysteresis, major_threshold, minor_correction, major_correction
+            )
+        # AC is ON - check if linear correction is enabled
+        use_linear = self._get_global_option(
+            CONF_USE_LINEAR_CORRECTION, DEFAULT_USE_LINEAR_CORRECTION
+        )
+        # ECO rule: if early_turn_off is enabled, it takes priority over linear correction
+        if is_eco and early_turn_off:
+            use_linear = False
 
         # AC temperature limits (from climate entity attributes)
         AC_MIN_TEMP = 16.0
@@ -562,6 +623,13 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
                 _LOGGER.info(
                     "Room %s: HEAT mode - major correction (diff %.1f): %.1f + %.1f = %.1f",
                     room_name, temp_diff, target_temp, major_correction, ac_target_temp
+                )
+            elif temp_diff >= 0 and is_eco and early_turn_off and not is_currently_off:
+                # ECO mode: Early turn off when target reached or exceeded in HEAT mode
+                should_turn_off = True
+                _LOGGER.info(
+                    "Room %s: HEAT mode (ECO) - target reached (diff %.1f) - TURNING OFF EARLY",
+                    room_name, temp_diff
                 )
             elif temp_diff > minor_hysteresis:
                 # Room is hot (beyond +minor_hysteresis) - don't heat, turn off or keep off
@@ -596,10 +664,6 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
                     )
                     return  # Don't send any commands
                 else:
-                    # AC is ON - check if linear correction is enabled
-                    use_linear = self._get_global_option(
-                        CONF_USE_LINEAR_CORRECTION, DEFAULT_USE_LINEAR_CORRECTION
-                    )
                     if use_linear:
                         # Linear correction within ±minor_hysteresis range (±0.5°C)
                         # At 0°C diff: no correction
@@ -645,6 +709,13 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
                     "Room %s: COOL mode - major correction (diff %.1f): %.1f - %.1f = %.1f",
                     room_name, temp_diff, target_temp, major_correction, ac_target_temp
                 )
+            elif temp_diff <= 0 and is_eco and early_turn_off and not is_currently_off:
+                # ECO mode: Early turn off when target reached or exceeded in COOL mode
+                should_turn_off = True
+                _LOGGER.info(
+                    "Room %s: COOL mode (ECO) - target reached (diff %.1f) - TURNING OFF EARLY",
+                    room_name, temp_diff
+                )
             elif temp_diff < -minor_hysteresis:
                 # Room is cold (beyond -minor_hysteresis) - don't cool, turn off or keep off
                 if is_currently_off:
@@ -678,10 +749,6 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
                     )
                     return  # Don't send any commands
                 else:
-                    # AC is ON - check if linear correction is enabled
-                    use_linear = self._get_global_option(
-                        CONF_USE_LINEAR_CORRECTION, DEFAULT_USE_LINEAR_CORRECTION
-                    )
                     if use_linear:
                         # Linear correction within ±minor_hysteresis range (±0.5°C)
                         # At 0°C diff: no correction
@@ -1033,6 +1100,17 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
                 await self._restore_from_boost(room_name)
             else:
                 room_state.preset_mode = PRESET_COMFORT
+                _LOGGER.info("Thermostat %s: switched to COMFORT mode", room_name)
+                await self._trigger_immediate_sync(f"COMFORT preset selected for {room_name}")
+
+        elif preset_mode == PRESET_ECO:
+            if old_preset in (PRESET_BOOST_HEAT, PRESET_BOOST_COOL):
+                await self._restore_from_boost(room_name)
+            
+            room_state.preset_mode = PRESET_ECO
+            _LOGGER.info("Thermostat %s: switched to ECO mode", room_name)
+            # Trigger an immediate update
+            await self._trigger_immediate_sync(f"ECO preset selected for {room_name}")
 
         elif preset_mode == PRESET_BOOST_HEAT:
             # Save current state before boost
@@ -1255,16 +1333,20 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
         await self._save_state()
 
         # Trigger immediate processing to apply restored mode and temperatures to ACs
-        try:
-            ac_names = list(self._room_states.keys())
-            if ac_names:
-                _LOGGER.info("Thermostat %s: triggering immediate sync after boost ended", room_name)
-                await self._process_group("multi_split", ac_names, force_sync=True)
-        except Exception as err:
-            _LOGGER.error("Error processing ACs after boost ended: %s", err)
+        await self._trigger_immediate_sync(f"boost ended in {room_name}")
 
         # Notify listeners - this will update UI
         self.async_set_updated_data({})
+
+    async def _trigger_immediate_sync(self, reason: str):
+        """Trigger an immediate synchronization of all ACs in the group."""
+        try:
+            ac_names = list(self._room_states.keys())
+            if ac_names:
+                _LOGGER.info("Triggering immediate sync: %s", reason)
+                await self._process_group("multi_split", ac_names, force_sync=True)
+        except Exception as err:
+            _LOGGER.error("Error during immediate sync (%s): %s", reason, err, exc_info=True)
 
     def get_room_state(self, room_name: str) -> RoomState | None:
         """Get room state."""

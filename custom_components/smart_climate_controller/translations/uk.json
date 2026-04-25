@@ -23,22 +23,53 @@
       },
       "global_settings": {
         "title": "Глобальні налаштування",
-        "description": "Налаштуйте глобальні параметри керування кліматом",
+        "description": "Налаштуйте параметри керування кліматом для всієї системи",
+        "sections": {
+          "sensors": {
+            "name": "Датчики та базові межі",
+            "description": "Налаштування датчиків та температурних меж для автоматичного вибору режиму"
+          },
+          "thresholds": {
+            "name": "Поріги та гістерезис",
+            "description": "Налаштування чутливості системи до зміни температури"
+          },
+          "correction": {
+            "name": "Корекція температури",
+            "description": "Налаштування того, як система змінює цільову температуру на кондиціонерах"
+          },
+          "timers": {
+            "name": "Таймери та інтервали",
+            "description": "Захисні інтервали для обладнання"
+          },
+          "boost": {
+            "name": "Режим Boost",
+            "description": "Налаштування для режиму швидкого нагріву/охолодження"
+          },
+          "eco": {
+            "name": "Режим Eco",
+            "description": "Налаштування для енергоефективного режиму"
+          }
+        },
         "data": {
           "outdoor_temp_sensor": "Датчик зовнішньої температури",
-          "outdoor_temp_heat_only": "Температура на вулиці для режиму тільки обігрів",
-          "outdoor_temp_cool_only": "Температура на вулиці для режиму тільки охолодження",
-          "minor_correction_hysteresis": "Гістерезис дрібної корекції",
-          "minor_correction_value": "Значення дрібної корекції",
-          "major_correction_value": "Значення сильної корекції",
-          "major_deviation_threshold": "Поріг великого відхилення",
-          "mode_switch_temp_threshold": "Поріг температури для перемикання режимів",
-          "use_linear_correction": "Використовувати лінійну корекцію температури",
-          "min_mode_switch_interval": "Мін. інтервал перемикання режимів (секунди)",
-          "min_power_switch_interval": "Мін. інтервал вмикання/вимикання (секунди)",
-          "boost_temp_offset": "Зміщення температури для форсованого режиму",
-          "boost_duration": "Тривалість форсованого режиму (секунди)",
-          "mode_switch_score_threshold": "Поріг різниці балів для перемикання режимів"
+          "outdoor_temp_heat_only": "Макс. вулична темп. для ОБІГРІВУ",
+          "outdoor_temp_cool_only": "Мін. вулична темп. для ОХОЛОДЖЕННЯ",
+          "minor_correction_hysteresis": "Гістерезис комфортної зони (±°C)",
+          "minor_correction_value": "Зміщення для дрібної корекції (°C)",
+          "major_correction_value": "Зміщення для сильної корекції (°C)",
+          "major_deviation_threshold": "Поріг значного відхилення (°C)",
+          "mode_switch_temp_threshold": "Поріг відхилення для зміни режиму (°C)",
+          "use_linear_correction": "Плавна (лінійна) корекція у комфортній зоні",
+          "min_mode_switch_interval": "Мін. час між зміною HEAT/COOL (сек)",
+          "min_power_switch_interval": "Мін. час між вмиканням/вимиканням (сек)",
+          "boost_temp_offset": "Додаткове зміщення для Boost (°C)",
+          "boost_duration": "Тривалість режиму Boost (сек)",
+          "mode_switch_score_threshold": "Чутливість перемикання групи (бали)",
+          "eco_threshold_multiplier": "Множник порогів (розширення зони)",
+          "eco_minor_correction_value": "Зміщення для дрібної корекції",
+          "eco_major_correction_value": "Зміщення для сильної корекції",
+          "eco_early_turn_off": "Вимкнення відразу при досягненні цілі",
+          "eco_weight_factor": "Вплив Eco-кімнат на вибір режиму групи"
         }
       }
     },
@@ -60,22 +91,53 @@
       },
       "global_settings": {
         "title": "Глобальні налаштування",
-        "description": "Налаштуйте глобальні параметри керування кліматом",
+        "description": "Налаштуйте параметри керування кліматом для всієї системи",
+        "sections": {
+          "sensors": {
+            "name": "Датчики та базові межі",
+            "description": "Налаштування датчиків та температурних меж для автоматичного вибору режиму"
+          },
+          "thresholds": {
+            "name": "Поріги та гістерезис",
+            "description": "Налаштування чутливості системи до зміни температури"
+          },
+          "correction": {
+            "name": "Корекція температури",
+            "description": "Налаштування того, як система змінює цільову температуру на кондиціонерах"
+          },
+          "timers": {
+            "name": "Таймери та інтервали",
+            "description": "Захисні інтервали для обладнання"
+          },
+          "boost": {
+            "name": "Режим Boost",
+            "description": "Налаштування для режиму швидкого нагріву/охолодження"
+          },
+          "eco": {
+            "name": "Режим Eco",
+            "description": "Налаштування для енергоефективного режиму"
+          }
+        },
         "data": {
           "outdoor_temp_sensor": "Датчик зовнішньої температури",
-          "outdoor_temp_heat_only": "Температура на вулиці для режиму тільки обігрів",
-          "outdoor_temp_cool_only": "Температура на вулиці для режиму тільки охолодження",
-          "minor_correction_hysteresis": "Гістерезис дрібної корекції",
-          "minor_correction_value": "Значення дрібної корекції",
-          "major_correction_value": "Значення сильної корекції",
-          "major_deviation_threshold": "Поріг великого відхилення",
-          "mode_switch_temp_threshold": "Поріг температури для перемикання режимів",
-          "use_linear_correction": "Використовувати лінійну корекцію температури",
-          "min_mode_switch_interval": "Мін. інтервал перемикання режимів (секунди)",
-          "min_power_switch_interval": "Мін. інтервал вмикання/вимикання (секунди)",
-          "boost_temp_offset": "Зміщення температури для форсованого режиму",
-          "boost_duration": "Тривалість форсованого режиму (секунди)",
-          "mode_switch_score_threshold": "Поріг різниці балів для перемикання режимів"
+          "outdoor_temp_heat_only": "Макс. вулична темп. для ОБІГРІВУ",
+          "outdoor_temp_cool_only": "Мін. вулична темп. для ОХОЛОДЖЕННЯ",
+          "minor_correction_hysteresis": "Гістерезис комфортної зони (±°C)",
+          "minor_correction_value": "Зміщення для дрібної корекції (°C)",
+          "major_correction_value": "Зміщення для сильної корекції (°C)",
+          "major_deviation_threshold": "Поріг значного відхилення (°C)",
+          "mode_switch_temp_threshold": "Поріг відхилення для зміни режиму (°C)",
+          "use_linear_correction": "Плавна (лінійна) корекція у комфортній зоні",
+          "min_mode_switch_interval": "Мін. час між зміною HEAT/COOL (сек)",
+          "min_power_switch_interval": "Мін. час між вмиканням/вимиканням (сек)",
+          "boost_temp_offset": "Додаткове зміщення для Boost (°C)",
+          "boost_duration": "Тривалість режиму Boost (сек)",
+          "mode_switch_score_threshold": "Чутливість перемикання групи (бали)",
+          "eco_threshold_multiplier": "Множник порогів (розширення зони)",
+          "eco_minor_correction_value": "Зміщення для дрібної корекції",
+          "eco_major_correction_value": "Зміщення для сильної корекції",
+          "eco_early_turn_off": "Вимкнення відразу при досягненні цілі",
+          "eco_weight_factor": "Вплив Eco-кімнат на вибір режиму групи"
         }
       }
     },
@@ -91,7 +153,8 @@
             "state": {
               "comfort": "Комфорт",
               "boost_heat": "Обігрів+",
-              "boost_cool": "Охолодження+"
+              "boost_cool": "Охолодження+",
+              "eco": "Eco"
             }
           }
         }
@@ -103,7 +166,8 @@
       "options": {
         "comfort": "Комфорт",
         "boost_heat": "Обігрів+",
-        "boost_cool": "Охолодження+"
+        "boost_cool": "Охолодження+",
+        "eco": "Eco"
       }
     }
   }

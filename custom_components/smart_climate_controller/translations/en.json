@@ -23,22 +23,53 @@
       },
       "global_settings": {
         "title": "Global Settings",
-        "description": "Configure global parameters for climate control",
+        "description": "Configure climate control parameters for the entire system",
+        "sections": {
+          "sensors": {
+            "name": "Sensors and Base Limits",
+            "description": "Sensor configuration and temperature limits for automatic mode selection"
+          },
+          "thresholds": {
+            "name": "Thresholds and Hysteresis",
+            "description": "System sensitivity settings for temperature changes"
+          },
+          "correction": {
+            "name": "Temperature Correction",
+            "description": "Configuration of how the system modifies target temperatures on AC units"
+          },
+          "timers": {
+            "name": "Timers and Intervals",
+            "description": "Protective intervals for equipment"
+          },
+          "boost": {
+            "name": "Boost Mode",
+            "description": "Settings for rapid heating/cooling mode"
+          },
+          "eco": {
+            "name": "Eco Mode",
+            "description": "Settings for energy-efficient mode"
+          }
+        },
         "data": {
           "outdoor_temp_sensor": "Outdoor Temperature Sensor",
-          "outdoor_temp_heat_only": "Outdoor temp for heat-only mode",
-          "outdoor_temp_cool_only": "Outdoor temp for cool-only mode",
-          "minor_correction_hysteresis": "Minor correction hysteresis",
-          "minor_correction_value": "Minor correction value",
-          "major_correction_value": "Major correction value",
-          "major_deviation_threshold": "Major deviation threshold",
-          "mode_switch_temp_threshold": "Mode switch temperature threshold",
-          "use_linear_correction": "Use linear temperature correction",
-          "min_mode_switch_interval": "Min mode switch interval (seconds)",
-          "min_power_switch_interval": "Min power switch interval (seconds)",
-          "boost_temp_offset": "Boost temperature offset",
-          "boost_duration": "Boost duration (seconds)",
-          "mode_switch_score_threshold": "Mode switch score threshold"
+          "outdoor_temp_heat_only": "Max outdoor temp for HEAT-ONLY",
+          "outdoor_temp_cool_only": "Min outdoor temp for COOL-ONLY",
+          "minor_correction_hysteresis": "Comfort zone hysteresis (±°C)",
+          "minor_correction_value": "Minor correction offset (°C)",
+          "major_correction_value": "Major correction offset (°C)",
+          "major_deviation_threshold": "Major deviation threshold (°C)",
+          "mode_switch_temp_threshold": "Mode switch deviation threshold (°C)",
+          "use_linear_correction": "Linear correction in comfort zone",
+          "min_mode_switch_interval": "Min mode switch interval (sec)",
+          "min_power_switch_interval": "Min power switch interval (sec)",
+          "boost_temp_offset": "Boost temperature offset (°C)",
+          "boost_duration": "Boost duration (sec)",
+          "mode_switch_score_threshold": "Group switching sensitivity (score)",
+          "eco_threshold_multiplier": "Threshold multiplier (zone expansion)",
+          "eco_minor_correction_value": "Eco minor correction offset",
+          "eco_major_correction_value": "Eco major correction offset",
+          "eco_early_turn_off": "Turn off immediately at target",
+          "eco_weight_factor": "Eco room weight for group mode selection"
         }
       }
     },
@@ -60,22 +91,53 @@
       },
       "global_settings": {
         "title": "Global Settings",
-        "description": "Configure global parameters for climate control",
+        "description": "Configure climate control parameters for the entire system",
+        "sections": {
+          "sensors": {
+            "name": "Sensors and Base Limits",
+            "description": "Sensor configuration and temperature limits for automatic mode selection"
+          },
+          "thresholds": {
+            "name": "Thresholds and Hysteresis",
+            "description": "System sensitivity settings for temperature changes"
+          },
+          "correction": {
+            "name": "Temperature Correction",
+            "description": "Configuration of how the system modifies target temperatures on AC units"
+          },
+          "timers": {
+            "name": "Timers and Intervals",
+            "description": "Protective intervals for equipment"
+          },
+          "boost": {
+            "name": "Boost Mode",
+            "description": "Settings for rapid heating/cooling mode"
+          },
+          "eco": {
+            "name": "Eco Mode",
+            "description": "Settings for energy-efficient mode"
+          }
+        },
         "data": {
           "outdoor_temp_sensor": "Outdoor Temperature Sensor",
-          "outdoor_temp_heat_only": "Outdoor temp for heat-only mode",
-          "outdoor_temp_cool_only": "Outdoor temp for cool-only mode",
-          "minor_correction_hysteresis": "Minor correction hysteresis",
-          "minor_correction_value": "Minor correction value",
-          "major_correction_value": "Major correction value",
-          "major_deviation_threshold": "Major deviation threshold",
-          "mode_switch_temp_threshold": "Mode switch temperature threshold",
-          "use_linear_correction": "Use linear temperature correction",
-          "min_mode_switch_interval": "Min mode switch interval (seconds)",
-          "min_power_switch_interval": "Min power switch interval (seconds)",
-          "boost_temp_offset": "Boost temperature offset",
-          "boost_duration": "Boost duration (seconds)",
-          "mode_switch_score_threshold": "Mode switch score threshold"
+          "outdoor_temp_heat_only": "Max outdoor temp for HEAT-ONLY",
+          "outdoor_temp_cool_only": "Min outdoor temp for COOL-ONLY",
+          "minor_correction_hysteresis": "Comfort zone hysteresis (±°C)",
+          "minor_correction_value": "Minor correction offset (°C)",
+          "major_correction_value": "Major correction offset (°C)",
+          "major_deviation_threshold": "Major deviation threshold (°C)",
+          "mode_switch_temp_threshold": "Mode switch deviation threshold (°C)",
+          "use_linear_correction": "Linear correction in comfort zone",
+          "min_mode_switch_interval": "Min mode switch interval (sec)",
+          "min_power_switch_interval": "Min power switch interval (sec)",
+          "boost_temp_offset": "Boost temperature offset (°C)",
+          "boost_duration": "Boost duration (sec)",
+          "mode_switch_score_threshold": "Group switching sensitivity (score)",
+          "eco_threshold_multiplier": "Threshold multiplier (zone expansion)",
+          "eco_minor_correction_value": "Eco minor correction offset",
+          "eco_major_correction_value": "Eco major correction offset",
+          "eco_early_turn_off": "Turn off immediately at target",
+          "eco_weight_factor": "Eco room weight for group mode selection"
         }
       }
     },
