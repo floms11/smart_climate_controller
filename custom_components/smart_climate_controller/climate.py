@@ -69,9 +69,9 @@ class SmartClimateThermostat(CoordinatorEntity, ClimateEntity):
     ]
     _attr_preset_modes = [
         PRESET_COMFORT,
+        PRESET_ECO,
         PRESET_BOOST_HEAT,
         PRESET_BOOST_COOL,
-        PRESET_ECO,
     ]
     _attr_min_temp = 16.0
     _attr_max_temp = 30.0
