@@ -1243,6 +1243,26 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
                         if other_room_name == room_name:
                             continue
 
+                        # If other room is in boost mode, restore it first
+                        if other_room_state.preset_mode in (PRESET_BOOST_HEAT, PRESET_BOOST_COOL):
+                            _LOGGER.info(
+                                "Room %s: canceling boost mode because of boost activation in %s",
+                                other_room_name, room_name
+                            )
+                            # We don't call _restore_from_boost here because it triggers its own sync
+                            # We just restore the values and let the loop handle the sync
+                            other_room_state.preset_mode = other_room_state.saved_preset_mode or PRESET_COMFORT
+                            if other_room_state.saved_temperature is not None:
+                                other_room_state.target_temperature = other_room_state.saved_temperature
+                            if other_room_state.saved_hvac_mode is not None:
+                                other_room_state.hvac_mode = other_room_state.saved_hvac_mode
+                            
+                            # Clear saved state
+                            other_room_state.saved_temperature = None
+                            other_room_state.saved_hvac_mode = None
+                            other_room_state.saved_preset_mode = None
+                            other_room_state.boost_end_time = None
+
                         _LOGGER.info(
                             "Room %s: syncing to AUTO mode and adapting to physical mode %s after boost activation in %s",
                             other_room_name, physical_mode, room_name
