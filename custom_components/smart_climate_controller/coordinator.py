@@ -83,6 +83,7 @@ class RoomState:
         self.boost_end_time: datetime | None = None  # When boost mode should end
         self.saved_temperature: float | None = None  # Temperature before boost
         self.saved_hvac_mode: HVACMode | None = None  # HVAC mode before boost
+        self.saved_preset_mode: str | None = None  # Preset mode before boost
 
 
 class SmartClimateCoordinator(DataUpdateCoordinator):
@@ -1116,6 +1117,7 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
             # Save current state before boost
             room_state.saved_temperature = room_state.target_temperature
             room_state.saved_hvac_mode = room_state.hvac_mode
+            room_state.saved_preset_mode = room_state.preset_mode
             room_state.preset_mode = PRESET_BOOST_HEAT
 
             # Get current indoor temperature
@@ -1167,6 +1169,7 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
             # Save current state before boost
             room_state.saved_temperature = room_state.target_temperature
             room_state.saved_hvac_mode = room_state.hvac_mode
+            room_state.saved_preset_mode = room_state.preset_mode
             room_state.preset_mode = PRESET_BOOST_COOL
 
             # Get current indoor temperature
@@ -1296,12 +1299,15 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
             room_state.target_temperature = room_state.saved_temperature
         if room_state.saved_hvac_mode is not None:
             room_state.hvac_mode = room_state.saved_hvac_mode
+        
+        # Restore preset mode (fallback to COMFORT if not saved)
+        room_state.preset_mode = room_state.saved_preset_mode or PRESET_COMFORT
 
         # Clear boost state
-        room_state.preset_mode = PRESET_COMFORT
         room_state.boost_end_time = None
         room_state.saved_temperature = None
         room_state.saved_hvac_mode = None
+        room_state.saved_preset_mode = None
 
         # Get restored mode for synchronization
         restored_hvac_mode = room_state.hvac_mode
@@ -1372,6 +1378,7 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
                     else None,
                     "saved_temperature": state.saved_temperature,
                     "saved_hvac_mode": state.saved_hvac_mode.value if state.saved_hvac_mode else None,
+                    "saved_preset_mode": state.saved_preset_mode,
                 }
                 for room_name, state in self._room_states.items()
             },
@@ -1441,6 +1448,9 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
 
             if room_data.get("saved_hvac_mode"):
                 room_state.saved_hvac_mode = HVACMode(room_data["saved_hvac_mode"])
+
+            if room_data.get("saved_preset_mode"):
+                room_state.saved_preset_mode = room_data["saved_preset_mode"]
 
             _LOGGER.info(
                 "Restored state for room %s: mode=%s, temp=%s, preset=%s, boost_end=%s",
