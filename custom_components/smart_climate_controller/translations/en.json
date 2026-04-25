@@ -26,8 +26,8 @@
         "description": "Configure climate control parameters for the entire system",
         "data": {
           "outdoor_temp_sensor": "--- [ SENSORS ] ---\nOutdoor Temperature Sensor",
-          "outdoor_temp_heat_only": "Max outdoor temp for HEAT-ONLY",
-          "outdoor_temp_cool_only": "Min outdoor temp for COOL-ONLY",
+          "outdoor_temp_heat_only": "HEAT-ONLY threshold (when outdoor is BELOW this)",
+          "outdoor_temp_cool_only": "COOL-ONLY threshold (when outdoor is ABOVE this)",
           "minor_correction_hysteresis": "--- [ THRESHOLDS & HYSTERESIS ] ---\nComfort zone hysteresis (±°C)",
           "major_deviation_threshold": "Major deviation threshold (°C)",
           "mode_switch_temp_threshold": "Group mode switch threshold (°C)",
@@ -68,8 +68,8 @@
         "description": "Configure climate control parameters for the entire system",
         "data": {
           "outdoor_temp_sensor": "--- [ SENSORS ] ---\nOutdoor Temperature Sensor",
-          "outdoor_temp_heat_only": "Max outdoor temp for HEAT-ONLY",
-          "outdoor_temp_cool_only": "Min outdoor temp for COOL-ONLY",
+          "outdoor_temp_heat_only": "HEAT-ONLY threshold (when outdoor is BELOW this)",
+          "outdoor_temp_cool_only": "COOL-ONLY threshold (when outdoor is ABOVE this)",
           "minor_correction_hysteresis": "--- [ THRESHOLDS & HYSTERESIS ] ---\nComfort zone hysteresis (±°C)",
           "major_deviation_threshold": "Major deviation threshold (°C)",
           "mode_switch_temp_threshold": "Group mode switch threshold (°C)",
