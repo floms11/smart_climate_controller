@@ -8,7 +8,6 @@ from homeassistant import config_entries
 from homeassistant.const import CONF_NAME
 from homeassistant.core import callback
 from homeassistant.helpers import selector
-from homeassistant.helpers.schema_config_entry_flow import section
 
 from .const import (
     CONF_AC_NAME,
@@ -129,16 +128,8 @@ class SmartClimateControllerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN)
     async def async_step_global_settings(self, user_input=None):
         """Handle global settings."""
         if user_input is not None:
-            # Flatten user_input from sections if present
-            flat_input = {}
-            for key, value in user_input.items():
-                if isinstance(value, dict):
-                    flat_input.update(value)
-                else:
-                    flat_input[key] = value
-
             # Extract outdoor sensor - store only at global level (not per AC unit)
-            outdoor_sensor = flat_input.pop(CONF_OUTDOOR_TEMP_SENSOR)
+            outdoor_sensor = user_input.pop(CONF_OUTDOOR_TEMP_SENSOR)
 
             return self.async_create_entry(
                 title="Smart Climate Controller",
@@ -146,7 +137,7 @@ class SmartClimateControllerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN)
                     CONF_AC_UNITS: self._ac_units,
                     CONF_OUTDOOR_TEMP_SENSOR: outdoor_sensor,
                 },
-                options=flat_input,
+                options=user_input,
             )
 
         schema = vol.Schema(
@@ -156,171 +147,135 @@ class SmartClimateControllerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN)
                         domain="sensor", device_class="temperature"
                     )
                 ),
-                vol.Optional("sensors"): section(
-                    vol.Schema(
-                        {
-                            vol.Required(
-                                CONF_OUTDOOR_TEMP_HEAT_ONLY,
-                                default=DEFAULT_OUTDOOR_TEMP_HEAT_ONLY,
-                            ): selector.NumberSelector(
-                                selector.NumberSelectorConfig(
-                                    min=-20, max=30, step=0.5, unit_of_measurement="°C"
-                                )
-                            ),
-                            vol.Required(
-                                CONF_OUTDOOR_TEMP_COOL_ONLY,
-                                default=DEFAULT_OUTDOOR_TEMP_COOL_ONLY,
-                            ): selector.NumberSelector(
-                                selector.NumberSelectorConfig(
-                                    min=0, max=40, step=0.5, unit_of_measurement="°C"
-                                )
-                            ),
-                        }
-                    ),
+                vol.Required(
+                    CONF_OUTDOOR_TEMP_HEAT_ONLY,
+                    default=DEFAULT_OUTDOOR_TEMP_HEAT_ONLY,
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=-20, max=30, step=0.5, unit_of_measurement="°C"
+                    )
                 ),
-                vol.Optional("thresholds"): section(
-                    vol.Schema(
-                        {
-                            vol.Required(
-                                CONF_MINOR_CORRECTION_HYSTERESIS,
-                                default=DEFAULT_MINOR_CORRECTION_HYSTERESIS,
-                            ): selector.NumberSelector(
-                                selector.NumberSelectorConfig(
-                                    min=0.1, max=2.0, step=0.1, unit_of_measurement="°C"
-                                )
-                            ),
-                            vol.Required(
-                                CONF_MAJOR_DEVIATION_THRESHOLD,
-                                default=DEFAULT_MAJOR_DEVIATION_THRESHOLD,
-                            ): selector.NumberSelector(
-                                selector.NumberSelectorConfig(
-                                    min=0.5, max=3.0, step=0.1, unit_of_measurement="°C"
-                                )
-                            ),
-                            vol.Required(
-                                CONF_MODE_SWITCH_TEMP_THRESHOLD,
-                                default=DEFAULT_MODE_SWITCH_TEMP_THRESHOLD,
-                            ): selector.NumberSelector(
-                                selector.NumberSelectorConfig(
-                                    min=0.5, max=3.0, step=0.1, unit_of_measurement="°C"
-                                )
-                            ),
-                            vol.Required(
-                                CONF_MODE_SWITCH_SCORE_THRESHOLD,
-                                default=DEFAULT_MODE_SWITCH_SCORE_THRESHOLD,
-                            ): selector.NumberSelector(
-                                selector.NumberSelectorConfig(min=0.0, max=50.0, step=1.0)
-                            ),
-                        }
-                    ),
+                vol.Required(
+                    CONF_OUTDOOR_TEMP_COOL_ONLY,
+                    default=DEFAULT_OUTDOOR_TEMP_COOL_ONLY,
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=0, max=40, step=0.5, unit_of_measurement="°C"
+                    )
                 ),
-                vol.Optional("correction"): section(
-                    vol.Schema(
-                        {
-                            vol.Required(
-                                CONF_MINOR_CORRECTION_VALUE,
-                                default=DEFAULT_MINOR_CORRECTION_VALUE,
-                            ): selector.NumberSelector(
-                                selector.NumberSelectorConfig(
-                                    min=1, max=15, step=0.5, unit_of_measurement="°C"
-                                )
-                            ),
-                            vol.Required(
-                                CONF_MAJOR_CORRECTION_VALUE,
-                                default=DEFAULT_MAJOR_CORRECTION_VALUE,
-                            ): selector.NumberSelector(
-                                selector.NumberSelectorConfig(
-                                    min=5, max=20, step=0.5, unit_of_measurement="°C"
-                                )
-                            ),
-                            vol.Required(
-                                CONF_USE_LINEAR_CORRECTION,
-                                default=DEFAULT_USE_LINEAR_CORRECTION,
-                            ): selector.BooleanSelector(),
-                        }
-                    ),
+                vol.Required(
+                    CONF_MINOR_CORRECTION_HYSTERESIS,
+                    default=DEFAULT_MINOR_CORRECTION_HYSTERESIS,
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=0.1, max=2.0, step=0.1, unit_of_measurement="°C"
+                    )
                 ),
-                vol.Optional("timers"): section(
-                    vol.Schema(
-                        {
-                            vol.Required(
-                                CONF_MIN_MODE_SWITCH_INTERVAL,
-                                default=DEFAULT_MIN_MODE_SWITCH_INTERVAL,
-                            ): selector.NumberSelector(
-                                selector.NumberSelectorConfig(
-                                    min=60, max=3600, step=60, unit_of_measurement="s"
-                                )
-                            ),
-                            vol.Required(
-                                CONF_MIN_POWER_SWITCH_INTERVAL,
-                                default=DEFAULT_MIN_POWER_SWITCH_INTERVAL,
-                            ): selector.NumberSelector(
-                                selector.NumberSelectorConfig(
-                                    min=60, max=1800, step=60, unit_of_measurement="s"
-                                )
-                            ),
-                        }
-                    ),
+                vol.Required(
+                    CONF_MAJOR_DEVIATION_THRESHOLD,
+                    default=DEFAULT_MAJOR_DEVIATION_THRESHOLD,
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=0.5, max=3.0, step=0.1, unit_of_measurement="°C"
+                    )
                 ),
-                vol.Optional("boost"): section(
-                    vol.Schema(
-                        {
-                            vol.Required(
-                                CONF_BOOST_TEMP_OFFSET,
-                                default=DEFAULT_BOOST_TEMP_OFFSET,
-                            ): selector.NumberSelector(
-                                selector.NumberSelectorConfig(
-                                    min=1.0, max=10.0, step=0.5, unit_of_measurement="°C"
-                                )
-                            ),
-                            vol.Required(
-                                CONF_BOOST_DURATION,
-                                default=DEFAULT_BOOST_DURATION,
-                            ): selector.NumberSelector(
-                                selector.NumberSelectorConfig(
-                                    min=60, max=1800, step=60, unit_of_measurement="s"
-                                )
-                            ),
-                        }
-                    ),
+                vol.Required(
+                    CONF_MODE_SWITCH_TEMP_THRESHOLD,
+                    default=DEFAULT_MODE_SWITCH_TEMP_THRESHOLD,
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=0.5, max=3.0, step=0.1, unit_of_measurement="°C"
+                    )
                 ),
-                vol.Optional("eco"): section(
-                    vol.Schema(
-                        {
-                            vol.Required(
-                                CONF_ECO_THRESHOLD_MULTIPLIER,
-                                default=DEFAULT_ECO_THRESHOLD_MULTIPLIER,
-                            ): selector.NumberSelector(
-                                selector.NumberSelectorConfig(min=1.0, max=5.0, step=0.1)
-                            ),
-                            vol.Required(
-                                CONF_ECO_MINOR_CORRECTION_VALUE,
-                                default=DEFAULT_ECO_MINOR_CORRECTION_VALUE,
-                            ): selector.NumberSelector(
-                                selector.NumberSelectorConfig(
-                                    min=0, max=10, step=0.5, unit_of_measurement="°C"
-                                )
-                            ),
-                            vol.Required(
-                                CONF_ECO_MAJOR_CORRECTION_VALUE,
-                                default=DEFAULT_ECO_MAJOR_CORRECTION_VALUE,
-                            ): selector.NumberSelector(
-                                selector.NumberSelectorConfig(
-                                    min=0, max=15, step=0.5, unit_of_measurement="°C"
-                                )
-                            ),
-                            vol.Required(
-                                CONF_ECO_EARLY_TURN_OFF,
-                                default=DEFAULT_ECO_EARLY_TURN_OFF,
-                            ): selector.BooleanSelector(),
-                            vol.Required(
-                                CONF_ECO_WEIGHT_FACTOR,
-                                default=DEFAULT_ECO_WEIGHT_FACTOR,
-                            ): selector.NumberSelector(
-                                selector.NumberSelectorConfig(min=0.1, max=1.0, step=0.1)
-                            ),
-                        }
-                    ),
+                vol.Required(
+                    CONF_MODE_SWITCH_SCORE_THRESHOLD,
+                    default=DEFAULT_MODE_SWITCH_SCORE_THRESHOLD,
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(min=0.0, max=50.0, step=1.0)
+                ),
+                vol.Required(
+                    CONF_MINOR_CORRECTION_VALUE,
+                    default=DEFAULT_MINOR_CORRECTION_VALUE,
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=1, max=15, step=0.5, unit_of_measurement="°C"
+                    )
+                ),
+                vol.Required(
+                    CONF_MAJOR_CORRECTION_VALUE,
+                    default=DEFAULT_MAJOR_CORRECTION_VALUE,
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=5, max=20, step=0.5, unit_of_measurement="°C"
+                    )
+                ),
+                vol.Required(
+                    CONF_USE_LINEAR_CORRECTION,
+                    default=DEFAULT_USE_LINEAR_CORRECTION,
+                ): selector.BooleanSelector(),
+                vol.Required(
+                    CONF_MIN_MODE_SWITCH_INTERVAL,
+                    default=DEFAULT_MIN_MODE_SWITCH_INTERVAL,
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=60, max=3600, step=60, unit_of_measurement="s"
+                    )
+                ),
+                vol.Required(
+                    CONF_MIN_POWER_SWITCH_INTERVAL,
+                    default=DEFAULT_MIN_POWER_SWITCH_INTERVAL,
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=60, max=1800, step=60, unit_of_measurement="s"
+                    )
+                ),
+                vol.Required(
+                    CONF_BOOST_TEMP_OFFSET,
+                    default=DEFAULT_BOOST_TEMP_OFFSET,
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=1.0, max=10.0, step=0.5, unit_of_measurement="°C"
+                    )
+                ),
+                vol.Required(
+                    CONF_BOOST_DURATION,
+                    default=DEFAULT_BOOST_DURATION,
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=60, max=1800, step=60, unit_of_measurement="s"
+                    )
+                ),
+                vol.Required(
+                    CONF_ECO_THRESHOLD_MULTIPLIER,
+                    default=DEFAULT_ECO_THRESHOLD_MULTIPLIER,
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(min=1.0, max=5.0, step=0.1)
+                ),
+                vol.Required(
+                    CONF_ECO_MINOR_CORRECTION_VALUE,
+                    default=DEFAULT_ECO_MINOR_CORRECTION_VALUE,
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=0, max=10, step=0.5, unit_of_measurement="°C"
+                    )
+                ),
+                vol.Required(
+                    CONF_ECO_MAJOR_CORRECTION_VALUE,
+                    default=DEFAULT_ECO_MAJOR_CORRECTION_VALUE,
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=0, max=15, step=0.5, unit_of_measurement="°C"
+                    )
+                ),
+                vol.Required(
+                    CONF_ECO_EARLY_TURN_OFF,
+                    default=DEFAULT_ECO_EARLY_TURN_OFF,
+                ): selector.BooleanSelector(),
+                vol.Required(
+                    CONF_ECO_WEIGHT_FACTOR,
+                    default=DEFAULT_ECO_WEIGHT_FACTOR,
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(min=0.1, max=1.0, step=0.1)
                 ),
             }
         )
@@ -352,16 +307,8 @@ class SmartClimateControllerOptionsFlow(config_entries.OptionsFlow):
     async def async_step_global_settings(self, user_input=None):
         """Handle global settings."""
         if user_input is not None:
-            # Flatten user_input from sections if present
-            flat_input = {}
-            for key, value in user_input.items():
-                if isinstance(value, dict):
-                    flat_input.update(value)
-                else:
-                    flat_input[key] = value
-
-            # Save outdoor sensor in options (will be read by coordinator)
-            return self.async_create_entry(title="", data=flat_input)
+            # Save all settings in options
+            return self.async_create_entry(title="", data=user_input)
 
         options = self.config_entry.options
         # Get current outdoor sensor from options first, then fallback to config data
@@ -380,221 +327,185 @@ class SmartClimateControllerOptionsFlow(config_entries.OptionsFlow):
                         domain="sensor", device_class="temperature"
                     )
                 ),
-                vol.Optional("sensors"): section(
-                    vol.Schema(
-                        {
-                            vol.Required(
-                                CONF_OUTDOOR_TEMP_HEAT_ONLY,
-                                default=options.get(
-                                    CONF_OUTDOOR_TEMP_HEAT_ONLY,
-                                    DEFAULT_OUTDOOR_TEMP_HEAT_ONLY,
-                                ),
-                            ): selector.NumberSelector(
-                                selector.NumberSelectorConfig(
-                                    min=-20, max=30, step=0.5, unit_of_measurement="°C"
-                                )
-                            ),
-                            vol.Required(
-                                CONF_OUTDOOR_TEMP_COOL_ONLY,
-                                default=options.get(
-                                    CONF_OUTDOOR_TEMP_COOL_ONLY,
-                                    DEFAULT_OUTDOOR_TEMP_COOL_ONLY,
-                                ),
-                            ): selector.NumberSelector(
-                                selector.NumberSelectorConfig(
-                                    min=0, max=40, step=0.5, unit_of_measurement="°C"
-                                )
-                            ),
-                        }
+                vol.Required(
+                    CONF_OUTDOOR_TEMP_HEAT_ONLY,
+                    default=options.get(
+                        CONF_OUTDOOR_TEMP_HEAT_ONLY,
+                        DEFAULT_OUTDOOR_TEMP_HEAT_ONLY,
                     ),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=-20, max=30, step=0.5, unit_of_measurement="°C"
+                    )
                 ),
-                vol.Optional("thresholds"): section(
-                    vol.Schema(
-                        {
-                            vol.Required(
-                                CONF_MINOR_CORRECTION_HYSTERESIS,
-                                default=options.get(
-                                    CONF_MINOR_CORRECTION_HYSTERESIS,
-                                    DEFAULT_MINOR_CORRECTION_HYSTERESIS,
-                                ),
-                            ): selector.NumberSelector(
-                                selector.NumberSelectorConfig(
-                                    min=0.1, max=2.0, step=0.1, unit_of_measurement="°C"
-                                )
-                            ),
-                            vol.Required(
-                                CONF_MAJOR_DEVIATION_THRESHOLD,
-                                default=options.get(
-                                    CONF_MAJOR_DEVIATION_THRESHOLD,
-                                    DEFAULT_MAJOR_DEVIATION_THRESHOLD,
-                                ),
-                            ): selector.NumberSelector(
-                                selector.NumberSelectorConfig(
-                                    min=0.5, max=3.0, step=0.1, unit_of_measurement="°C"
-                                )
-                            ),
-                            vol.Required(
-                                CONF_MODE_SWITCH_TEMP_THRESHOLD,
-                                default=options.get(
-                                    CONF_MODE_SWITCH_TEMP_THRESHOLD,
-                                    DEFAULT_MODE_SWITCH_TEMP_THRESHOLD,
-                                ),
-                            ): selector.NumberSelector(
-                                selector.NumberSelectorConfig(
-                                    min=0.5, max=3.0, step=0.1, unit_of_measurement="°C"
-                                )
-                            ),
-                            vol.Required(
-                                CONF_MODE_SWITCH_SCORE_THRESHOLD,
-                                default=options.get(
-                                    CONF_MODE_SWITCH_SCORE_THRESHOLD,
-                                    DEFAULT_MODE_SWITCH_SCORE_THRESHOLD,
-                                ),
-                            ): selector.NumberSelector(
-                                selector.NumberSelectorConfig(min=0.0, max=50.0, step=1.0)
-                            ),
-                        }
+                vol.Required(
+                    CONF_OUTDOOR_TEMP_COOL_ONLY,
+                    default=options.get(
+                        CONF_OUTDOOR_TEMP_COOL_ONLY,
+                        DEFAULT_OUTDOOR_TEMP_COOL_ONLY,
                     ),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=0, max=40, step=0.5, unit_of_measurement="°C"
+                    )
                 ),
-                vol.Optional("correction"): section(
-                    vol.Schema(
-                        {
-                            vol.Required(
-                                CONF_MINOR_CORRECTION_VALUE,
-                                default=options.get(
-                                    CONF_MINOR_CORRECTION_VALUE,
-                                    DEFAULT_MINOR_CORRECTION_VALUE,
-                                ),
-                            ): selector.NumberSelector(
-                                selector.NumberSelectorConfig(
-                                    min=1, max=15, step=0.5, unit_of_measurement="°C"
-                                )
-                            ),
-                            vol.Required(
-                                CONF_MAJOR_CORRECTION_VALUE,
-                                default=options.get(
-                                    CONF_MAJOR_CORRECTION_VALUE,
-                                    DEFAULT_MAJOR_CORRECTION_VALUE,
-                                ),
-                            ): selector.NumberSelector(
-                                selector.NumberSelectorConfig(
-                                    min=5, max=20, step=0.5, unit_of_measurement="°C"
-                                )
-                            ),
-                            vol.Required(
-                                CONF_USE_LINEAR_CORRECTION,
-                                default=options.get(
-                                    CONF_USE_LINEAR_CORRECTION,
-                                    DEFAULT_USE_LINEAR_CORRECTION,
-                                ),
-                            ): selector.BooleanSelector(),
-                        }
+                vol.Required(
+                    CONF_MINOR_CORRECTION_HYSTERESIS,
+                    default=options.get(
+                        CONF_MINOR_CORRECTION_HYSTERESIS,
+                        DEFAULT_MINOR_CORRECTION_HYSTERESIS,
                     ),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=0.1, max=2.0, step=0.1, unit_of_measurement="°C"
+                    )
                 ),
-                vol.Optional("timers"): section(
-                    vol.Schema(
-                        {
-                            vol.Required(
-                                CONF_MIN_MODE_SWITCH_INTERVAL,
-                                default=options.get(
-                                    CONF_MIN_MODE_SWITCH_INTERVAL,
-                                    DEFAULT_MIN_MODE_SWITCH_INTERVAL,
-                                ),
-                            ): selector.NumberSelector(
-                                selector.NumberSelectorConfig(
-                                    min=60, max=3600, step=60, unit_of_measurement="s"
-                                )
-                            ),
-                            vol.Required(
-                                CONF_MIN_POWER_SWITCH_INTERVAL,
-                                default=options.get(
-                                    CONF_MIN_POWER_SWITCH_INTERVAL,
-                                    DEFAULT_MIN_POWER_SWITCH_INTERVAL,
-                                ),
-                            ): selector.NumberSelector(
-                                selector.NumberSelectorConfig(
-                                    min=60, max=1800, step=60, unit_of_measurement="s"
-                                )
-                            ),
-                        }
+                vol.Required(
+                    CONF_MAJOR_DEVIATION_THRESHOLD,
+                    default=options.get(
+                        CONF_MAJOR_DEVIATION_THRESHOLD,
+                        DEFAULT_MAJOR_DEVIATION_THRESHOLD,
                     ),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=0.5, max=3.0, step=0.1, unit_of_measurement="°C"
+                    )
                 ),
-                vol.Optional("boost"): section(
-                    vol.Schema(
-                        {
-                            vol.Required(
-                                CONF_BOOST_TEMP_OFFSET,
-                                default=options.get(
-                                    CONF_BOOST_TEMP_OFFSET, DEFAULT_BOOST_TEMP_OFFSET
-                                ),
-                            ): selector.NumberSelector(
-                                selector.NumberSelectorConfig(
-                                    min=1.0, max=10.0, step=0.5, unit_of_measurement="°C"
-                                )
-                            ),
-                            vol.Required(
-                                CONF_BOOST_DURATION,
-                                default=options.get(
-                                    CONF_BOOST_DURATION, DEFAULT_BOOST_DURATION
-                                ),
-                            ): selector.NumberSelector(
-                                selector.NumberSelectorConfig(
-                                    min=60, max=1800, step=60, unit_of_measurement="s"
-                                )
-                            ),
-                        }
+                vol.Required(
+                    CONF_MODE_SWITCH_TEMP_THRESHOLD,
+                    default=options.get(
+                        CONF_MODE_SWITCH_TEMP_THRESHOLD,
+                        DEFAULT_MODE_SWITCH_TEMP_THRESHOLD,
                     ),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=0.5, max=3.0, step=0.1, unit_of_measurement="°C"
+                    )
                 ),
-                vol.Optional("eco"): section(
-                    vol.Schema(
-                        {
-                            vol.Required(
-                                CONF_ECO_THRESHOLD_MULTIPLIER,
-                                default=options.get(
-                                    CONF_ECO_THRESHOLD_MULTIPLIER,
-                                    DEFAULT_ECO_THRESHOLD_MULTIPLIER,
-                                ),
-                            ): selector.NumberSelector(
-                                selector.NumberSelectorConfig(min=1.0, max=5.0, step=0.1)
-                            ),
-                            vol.Required(
-                                CONF_ECO_MINOR_CORRECTION_VALUE,
-                                default=options.get(
-                                    CONF_ECO_MINOR_CORRECTION_VALUE,
-                                    DEFAULT_ECO_MINOR_CORRECTION_VALUE,
-                                ),
-                            ): selector.NumberSelector(
-                                selector.NumberSelectorConfig(
-                                    min=0, max=10, step=0.5, unit_of_measurement="°C"
-                                )
-                            ),
-                            vol.Required(
-                                CONF_ECO_MAJOR_CORRECTION_VALUE,
-                                default=options.get(
-                                    CONF_ECO_MAJOR_CORRECTION_VALUE,
-                                    DEFAULT_ECO_MAJOR_CORRECTION_VALUE,
-                                ),
-                            ): selector.NumberSelector(
-                                selector.NumberSelectorConfig(
-                                    min=0, max=15, step=0.5, unit_of_measurement="°C"
-                                )
-                            ),
-                            vol.Required(
-                                CONF_ECO_EARLY_TURN_OFF,
-                                default=options.get(
-                                    CONF_ECO_EARLY_TURN_OFF, DEFAULT_ECO_EARLY_TURN_OFF
-                                ),
-                            ): selector.BooleanSelector(),
-                            vol.Required(
-                                CONF_ECO_WEIGHT_FACTOR,
-                                default=options.get(
-                                    CONF_ECO_WEIGHT_FACTOR, DEFAULT_ECO_WEIGHT_FACTOR
-                                ),
-                            ): selector.NumberSelector(
-                                selector.NumberSelectorConfig(min=0.1, max=1.0, step=0.1)
-                            ),
-                        }
+                vol.Required(
+                    CONF_MODE_SWITCH_SCORE_THRESHOLD,
+                    default=options.get(
+                        CONF_MODE_SWITCH_SCORE_THRESHOLD,
+                        DEFAULT_MODE_SWITCH_SCORE_THRESHOLD,
                     ),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(min=0.0, max=50.0, step=1.0)
+                ),
+                vol.Required(
+                    CONF_MINOR_CORRECTION_VALUE,
+                    default=options.get(
+                        CONF_MINOR_CORRECTION_VALUE,
+                        DEFAULT_MINOR_CORRECTION_VALUE,
+                    ),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=1, max=15, step=0.5, unit_of_measurement="°C"
+                    )
+                ),
+                vol.Required(
+                    CONF_MAJOR_CORRECTION_VALUE,
+                    default=options.get(
+                        CONF_MAJOR_CORRECTION_VALUE,
+                        DEFAULT_MAJOR_CORRECTION_VALUE,
+                    ),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=5, max=20, step=0.5, unit_of_measurement="°C"
+                    )
+                ),
+                vol.Required(
+                    CONF_USE_LINEAR_CORRECTION,
+                    default=options.get(
+                        CONF_USE_LINEAR_CORRECTION,
+                        DEFAULT_USE_LINEAR_CORRECTION,
+                    ),
+                ): selector.BooleanSelector(),
+                vol.Required(
+                    CONF_MIN_MODE_SWITCH_INTERVAL,
+                    default=options.get(
+                        CONF_MIN_MODE_SWITCH_INTERVAL,
+                        DEFAULT_MIN_MODE_SWITCH_INTERVAL,
+                    ),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=60, max=3600, step=60, unit_of_measurement="s"
+                    )
+                ),
+                vol.Required(
+                    CONF_MIN_POWER_SWITCH_INTERVAL,
+                    default=options.get(
+                        CONF_MIN_POWER_SWITCH_INTERVAL,
+                        DEFAULT_MIN_POWER_SWITCH_INTERVAL,
+                    ),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=60, max=1800, step=60, unit_of_measurement="s"
+                    )
+                ),
+                vol.Required(
+                    CONF_BOOST_TEMP_OFFSET,
+                    default=options.get(
+                        CONF_BOOST_TEMP_OFFSET, DEFAULT_BOOST_TEMP_OFFSET
+                    ),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=1.0, max=10.0, step=0.5, unit_of_measurement="°C"
+                    )
+                ),
+                vol.Required(
+                    CONF_BOOST_DURATION,
+                    default=options.get(
+                        CONF_BOOST_DURATION, DEFAULT_BOOST_DURATION
+                    ),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=60, max=1800, step=60, unit_of_measurement="s"
+                    )
+                ),
+                vol.Required(
+                    CONF_ECO_THRESHOLD_MULTIPLIER,
+                    default=options.get(
+                        CONF_ECO_THRESHOLD_MULTIPLIER,
+                        DEFAULT_ECO_THRESHOLD_MULTIPLIER,
+                    ),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(min=1.0, max=5.0, step=0.1)
+                ),
+                vol.Required(
+                    CONF_ECO_MINOR_CORRECTION_VALUE,
+                    default=options.get(
+                        CONF_ECO_MINOR_CORRECTION_VALUE,
+                        DEFAULT_ECO_MINOR_CORRECTION_VALUE,
+                    ),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=0, max=10, step=0.5, unit_of_measurement="°C"
+                    )
+                ),
+                vol.Required(
+                    CONF_ECO_MAJOR_CORRECTION_VALUE,
+                    default=options.get(
+                        CONF_ECO_MAJOR_CORRECTION_VALUE,
+                        DEFAULT_ECO_MAJOR_CORRECTION_VALUE,
+                    ),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=0, max=15, step=0.5, unit_of_measurement="°C"
+                    )
+                ),
+                vol.Required(
+                    CONF_ECO_EARLY_TURN_OFF,
+                    default=options.get(
+                        CONF_ECO_EARLY_TURN_OFF, DEFAULT_ECO_EARLY_TURN_OFF
+                    ),
+                ): selector.BooleanSelector(),
+                vol.Required(
+                    CONF_ECO_WEIGHT_FACTOR,
+                    default=options.get(
+                        CONF_ECO_WEIGHT_FACTOR, DEFAULT_ECO_WEIGHT_FACTOR
+                    ),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(min=0.1, max=1.0, step=0.1)
                 ),
             }
         )

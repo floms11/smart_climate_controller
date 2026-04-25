@@ -24,32 +24,6 @@
       "global_settings": {
         "title": "Global Settings",
         "description": "Configure climate control parameters for the entire system",
-        "sections": {
-          "sensors": {
-            "name": "Sensors and Base Limits",
-            "description": "Sensor configuration and temperature limits for automatic mode selection"
-          },
-          "thresholds": {
-            "name": "Thresholds and Hysteresis",
-            "description": "System sensitivity settings for temperature changes"
-          },
-          "correction": {
-            "name": "Temperature Correction",
-            "description": "Configuration of how the system modifies target temperatures on AC units"
-          },
-          "timers": {
-            "name": "Timers and Intervals",
-            "description": "Protective intervals for equipment"
-          },
-          "boost": {
-            "name": "Boost Mode",
-            "description": "Settings for rapid heating/cooling mode"
-          },
-          "eco": {
-            "name": "Eco Mode",
-            "description": "Settings for energy-efficient mode"
-          }
-        },
         "data": {
           "outdoor_temp_sensor": "Outdoor Temperature Sensor",
           "outdoor_temp_heat_only": "Max outdoor temp for HEAT-ONLY",
@@ -92,32 +66,6 @@
       "global_settings": {
         "title": "Global Settings",
         "description": "Configure climate control parameters for the entire system",
-        "sections": {
-          "sensors": {
-            "name": "Sensors and Base Limits",
-            "description": "Sensor configuration and temperature limits for automatic mode selection"
-          },
-          "thresholds": {
-            "name": "Thresholds and Hysteresis",
-            "description": "System sensitivity settings for temperature changes"
-          },
-          "correction": {
-            "name": "Temperature Correction",
-            "description": "Configuration of how the system modifies target temperatures on AC units"
-          },
-          "timers": {
-            "name": "Timers and Intervals",
-            "description": "Protective intervals for equipment"
-          },
-          "boost": {
-            "name": "Boost Mode",
-            "description": "Settings for rapid heating/cooling mode"
-          },
-          "eco": {
-            "name": "Eco Mode",
-            "description": "Settings for energy-efficient mode"
-          }
-        },
         "data": {
           "outdoor_temp_sensor": "Outdoor Temperature Sensor",
           "outdoor_temp_heat_only": "Max outdoor temp for HEAT-ONLY",
