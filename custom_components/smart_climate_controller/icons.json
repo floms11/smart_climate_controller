@@ -9,7 +9,8 @@
             "state": {
               "comfort": "mdi:home-thermometer-outline",
               "boost_heat": "mdi:fire",
-              "boost_cool": "mdi:snowflake"
+              "boost_cool": "mdi:snowflake",
+              "eco": "mdi:leaf"
             }
           }
         }
