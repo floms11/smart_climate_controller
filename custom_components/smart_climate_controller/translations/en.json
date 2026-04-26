@@ -43,7 +43,8 @@
           "eco_minor_correction_value": "Eco: Minor correction offset (°C)",
           "eco_major_correction_value": "Eco: Major correction offset (°C)",
           "eco_early_turn_off": "Eco: Turn off immediately at target",
-          "eco_weight_factor": "Eco: Room weight for group mode selection"
+          "eco_weight_factor": "Eco: Room weight for group mode selection",
+          "eco_temperature_offset": "Eco: AC target offset in comfort zone (°C)"
         }
       }
     },
@@ -85,7 +86,8 @@
           "eco_minor_correction_value": "Eco: Minor correction offset (°C)",
           "eco_major_correction_value": "Eco: Major correction offset (°C)",
           "eco_early_turn_off": "Eco: Turn off immediately at target",
-          "eco_weight_factor": "Eco: Room weight for group mode selection"
+          "eco_weight_factor": "Eco: Room weight for group mode selection",
+          "eco_temperature_offset": "Eco: AC target offset in comfort zone (°C)"
         }
       }
     },

@@ -31,6 +31,7 @@ from .const import (
     CONF_ECO_MAJOR_CORRECTION_VALUE,
     CONF_ECO_EARLY_TURN_OFF,
     CONF_ECO_WEIGHT_FACTOR,
+    CONF_ECO_TEMPERATURE_OFFSET,
     CONF_OUTDOOR_TEMP_COOL_ONLY,
     CONF_OUTDOOR_TEMP_HEAT_ONLY,
     CONF_OUTDOOR_TEMP_SENSOR,
@@ -52,6 +53,7 @@ from .const import (
     DEFAULT_ECO_MAJOR_CORRECTION_VALUE,
     DEFAULT_ECO_EARLY_TURN_OFF,
     DEFAULT_ECO_WEIGHT_FACTOR,
+    DEFAULT_ECO_TEMPERATURE_OFFSET,
     DEFAULT_OUTDOOR_TEMP_COOL_ONLY,
     DEFAULT_OUTDOOR_TEMP_HEAT_ONLY,
     DEFAULT_USE_LINEAR_CORRECTION,
@@ -570,6 +572,9 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
         early_turn_off = self._get_global_option(
             CONF_ECO_EARLY_TURN_OFF, DEFAULT_ECO_EARLY_TURN_OFF
         )
+        eco_temp_offset = self._get_global_option(
+            CONF_ECO_TEMPERATURE_OFFSET, DEFAULT_ECO_TEMPERATURE_OFFSET
+        )
 
         # Apply ECO mode threshold multiplier and custom correction values
         is_eco = room_state.preset_mode == PRESET_ECO
@@ -689,10 +694,17 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
                     else:
                         # No linear correction - maintain target temperature
                         ac_target_temp = target_temp
-                        _LOGGER.info(
-                            "Room %s: HEAT mode - within acceptable range (diff %.1f) - maintaining target %.1f",
-                            room_name, temp_diff, ac_target_temp
-                        )
+                        if is_eco and eco_temp_offset > 0:
+                            ac_target_temp = max(target_temp - eco_temp_offset, AC_MIN_TEMP)
+                            _LOGGER.info(
+                                "Room %s: HEAT mode (ECO) - comfort zone, applying offset: %.1f - %.1f = %.1f",
+                                room_name, target_temp, eco_temp_offset, ac_target_temp
+                            )
+                        else:
+                            _LOGGER.info(
+                                "Room %s: HEAT mode - within acceptable range (diff %.1f) - maintaining target %.1f",
+                                room_name, temp_diff, ac_target_temp
+                            )
 
         elif physical_mode == HVACMode.COOL:
             # Cooling mode logic
@@ -774,10 +786,17 @@ class SmartClimateCoordinator(DataUpdateCoordinator):
                     else:
                         # No linear correction - maintain target temperature
                         ac_target_temp = target_temp
-                        _LOGGER.info(
-                            "Room %s: COOL mode - within acceptable range (diff %.1f) - maintaining target %.1f",
-                            room_name, temp_diff, ac_target_temp
-                        )
+                        if is_eco and eco_temp_offset > 0:
+                            ac_target_temp = min(target_temp + eco_temp_offset, AC_MAX_TEMP)
+                            _LOGGER.info(
+                                "Room %s: COOL mode (ECO) - comfort zone, applying offset: %.1f + %.1f = %.1f",
+                                room_name, target_temp, eco_temp_offset, ac_target_temp
+                            )
+                        else:
+                            _LOGGER.info(
+                                "Room %s: COOL mode - within acceptable range (diff %.1f) - maintaining target %.1f",
+                                room_name, temp_diff, ac_target_temp
+                            )
 
         # Ensure temperature is within AC limits
         if ac_target_temp is not None:

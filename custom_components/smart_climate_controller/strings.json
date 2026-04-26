@@ -43,7 +43,8 @@
           "eco_minor_correction_value": "Eco: Зміщення для дрібної корекції (°C)",
           "eco_major_correction_value": "Eco: Зміщення для сильної корекції (°C)",
           "eco_early_turn_off": "Eco: Вимкнення відразу при досягненні цілі",
-          "eco_weight_factor": "Eco: Вплив кімнати на вибір режиму групи"
+          "eco_weight_factor": "Eco: Вплив кімнати на вибір режиму групи",
+          "eco_temperature_offset": "Eco: Зміщення на AC у комфортній зоні (°C)"
         }
       }
     },
@@ -85,7 +86,8 @@
           "eco_minor_correction_value": "Eco: Зміщення для дрібної корекції (°C)",
           "eco_major_correction_value": "Eco: Зміщення для сильної корекції (°C)",
           "eco_early_turn_off": "Eco: Вимкнення відразу при досягненні цілі",
-          "eco_weight_factor": "Eco: Вплив кімнати на вибір режиму групи"
+          "eco_weight_factor": "Eco: Вплив кімнати на вибір режиму групи",
+          "eco_temperature_offset": "Eco: Зміщення на AC у комфортній зоні (°C)"
         }
       }
     },

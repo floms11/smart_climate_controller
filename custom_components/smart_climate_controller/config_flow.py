@@ -29,6 +29,7 @@ from .const import (
     CONF_ECO_MAJOR_CORRECTION_VALUE,
     CONF_ECO_EARLY_TURN_OFF,
     CONF_ECO_WEIGHT_FACTOR,
+    CONF_ECO_TEMPERATURE_OFFSET,
     CONF_OUTDOOR_TEMP_COOL_ONLY,
     CONF_OUTDOOR_TEMP_HEAT_ONLY,
     CONF_OUTDOOR_TEMP_SENSOR,
@@ -48,6 +49,7 @@ from .const import (
     DEFAULT_ECO_MAJOR_CORRECTION_VALUE,
     DEFAULT_ECO_EARLY_TURN_OFF,
     DEFAULT_ECO_WEIGHT_FACTOR,
+    DEFAULT_ECO_TEMPERATURE_OFFSET,
     DEFAULT_OUTDOOR_TEMP_COOL_ONLY,
     DEFAULT_OUTDOOR_TEMP_HEAT_ONLY,
     DEFAULT_USE_LINEAR_CORRECTION,
@@ -276,6 +278,14 @@ class SmartClimateControllerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN)
                     default=DEFAULT_ECO_WEIGHT_FACTOR,
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(min=0.1, max=1.0, step=0.1)
+                ),
+                vol.Required(
+                    CONF_ECO_TEMPERATURE_OFFSET,
+                    default=DEFAULT_ECO_TEMPERATURE_OFFSET,
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=0.0, max=5.0, step=0.5, unit_of_measurement="°C"
+                    )
                 ),
             }
         )
@@ -506,6 +516,16 @@ class SmartClimateControllerOptionsFlow(config_entries.OptionsFlow):
                     ),
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(min=0.1, max=1.0, step=0.1)
+                ),
+                vol.Required(
+                    CONF_ECO_TEMPERATURE_OFFSET,
+                    default=options.get(
+                        CONF_ECO_TEMPERATURE_OFFSET, DEFAULT_ECO_TEMPERATURE_OFFSET
+                    ),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=0.0, max=5.0, step=0.5, unit_of_measurement="°C"
+                    )
                 ),
             }
         )
